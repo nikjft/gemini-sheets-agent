@@ -81,9 +81,28 @@ This project allows you to orchestrate multi-agent workflows directly within Goo
     *   **Run Automated Agents**: Runs all agents with `Auto-Run` = `Yes`.
     *   **Run Current Agent**: Runs the agent corresponding to the active tab.
     *   **Re-process Selected Row**: clear the "Process State" of the selected row and run immediately.
-*   **Automated**: The script is set up to run every X minutes (default 5 or 10) if you enable the trigger. (You may need to run `createTimeBasedTriggers` function once manually from the editor).
+*   **Automated**: To make this script run automatically, set up a time-based trigger.
+    1.  Open the Apps Script editor (**Extensions** > **Apps Script**).
+    2.  Select `Code.gs` from the file list.
+    3.  From the function dropdown (top bar), select `createTimeBasedTriggers`.
+    4.  Click **Run**.
+    5.  Grant permissions if prompted.
+    6.  This will create a trigger that runs `runAllAgents` every 5 minutes.
 
 ## Troubleshooting
 
 *   **Permissions**: The first time you run it, Google will ask for permissions. Approve them.
 *   **Timeouts**: If you have hundreds of rows, the script might time out (6 mins). It is designed to pick up where it left off on the next run.
+
+## License & Disclaimer
+
+**"Vibe Coded" & Provided As-Is**
+
+This code was created with the assistance of AI and is provided "as-is" without any warranty of any kind, express or implied. Use it at your own risk.
+
+**License**
+
+Values: MIT. 
+You are free to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the software for both personal and commercial purposes.
+
+See [LICENSE](LICENSE) for full details.
