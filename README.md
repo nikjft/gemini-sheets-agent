@@ -134,11 +134,42 @@ If you have a large text (like a transcript) on your clipboard:
 3.  Paste the text into the box and click **Submit**.
     *   If the text is huge (>45k chars), it will automatically be cached to Drive.
 
-### 5. Append to Existing Document
-You can have an agent add text to an existing Google Doc (e.g., adding a summary to meeting notes) instead of creating a new file.
-1.  In the **Agents** tab, set **Output Format** to `Append to Input Doc`.
-2.  Ensure the **Input** for that agent is a **Google Doc URL**.
-3.  The agent will append its output to the bottom of that document with a timestamp header.
+### 6. Global Notifications (Toast)
+Receive a simple notification when an Agent finishes a batch.
+1.  **Configuration**: Click **Agent Orchestrator** > **Configuration** > **Configure Notifications**.
+2.  **Paste URL**: Enter your webhook URL (e.g., from `ntfy.sh` or similar).
+3.  **Mechanism**: The system sends a **POST** request to your URL with the message appended as a query parameter: `?message=Agent...`.
+4.  **Enable per Agent**: In the **Agents** tab, set **Notify User** to `Yes`.
+
+### 7. Post-Processing Webhook
+Send the final output of each row to another service (e.g., Zapier, Make) for downstream automation.
+1.  **Agents Tab**: Enter a URL in the **Post-Processing URL** column.
+2.  **Payload**: The system sends a **POST** request with a JSON body:
+    ```json
+    {
+      "agentName": "ResearchAgent",
+      "jobId": "GUID-123",
+      "output": "The full text output from the agent..."
+    }
+    ```
+
+### 8. Structured Data Output
+To get an agent to return JSON for your Post-Processing webhook, use a prompt like this:
+
+**System Prompt Example:**
+```text
+You are a data extractor.
+You must output ONLY valid JSON.
+Do not include markdown formatting or code blocks.
+Structure:
+{
+  "summary": "Brief summary",
+  "sentiment": "Positive/Negative",
+  "action_items": ["Item 1", "Item 2"]
+}
+```
+
+**Result:** The `output` field in the webhook payload will contain that JSON string, which your downstream tool can parse.
 
 ## Advanced Features
 

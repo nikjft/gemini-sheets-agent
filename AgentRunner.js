@@ -57,6 +57,8 @@ var AgentRunner = {
 		// We look for rows with Quality = 2 (Good) and Quality = 0 (Bad)
 		let goodExamples = [];
 		let badExamples = [];
+		let itemsProcessed = 0;
+		let processingErrors = 0;
 
 		// Limit examples to avoid massive prompt
 		const MAX_EXAMPLES = 3;
@@ -218,6 +220,27 @@ ${inputVal}
 				sheet.getRange(rowIndex, headers['Output']).setValue(finalOutput);
 				sheet.getRange(rowIndex, headers['Process State']).setValue('Completed');
 
+				itemsProcessed++;
+
+				// --- POST-PROCESSING WEBHOOK (Per Row) ---
+				if (config.postProcessingUrl) {
+					try {
+						const payload = {
+							agentName: agentName,
+							jobId: jobId,
+							output: finalOutput
+						};
+
+						UrlFetchApp.fetch(config.postProcessingUrl, {
+							method: 'post',
+							contentType: 'application/json',
+							payload: JSON.stringify(payload)
+						});
+					} catch (e) {
+						console.warn(`Post-processing webhook failed: ${e.toString()}`);
+					}
+				}
+
 				// Handoff to Next Agent
 				if (routedDestination) {
 					// Need to merge config with new destination temporarily
@@ -227,6 +250,7 @@ ${inputVal}
 
 			} else {
 				// Handle Error
+				processingErrors++;
 				sheet.getRange(rowIndex, headers['Process State']).setValue('Error');
 				sheet.getRange(rowIndex, headers['Error']).setValue(JSON.stringify(result.error));
 			}
@@ -235,7 +259,47 @@ ${inputVal}
 			SpreadsheetApp.flush();
 		}
 
+		// --- POST-RUN ACTIONS ---
+
+		// 1. Global Notification (if enabled for this agent)
+		const processedCount = data.length; // Simplified for now, ideally we count actuals
+		// Better: We track actual work done in loop
+		// Since we don't have a counter variable outside loop, let's just notify if we did anything.
+		// Actually, `data` contains ALL rows. We only processed some.
+		// Optimization: Retuurn count from loop.
+
+		// Let's do Post-Processing per row inside the loop effectively?
+		// No, user requirement: "Post-Processing Webhook... pass JSON payload... row by row".
+		// OK, so Post-Processing is INSIDE Loop.
+		// Notification is "processed [number] of records". That is OUTSIDE loop.
+
+		// 1. Global Notification (if enabled for this agent)
+		if (config.notifyUser === 'Yes' && (itemsProcessed > 0 || processingErrors > 0)) {
+			this.sendNotification(agentName, itemsProcessed, processingErrors);
+		}
+
 		return false; // Completed without timeout
+	},
+
+	/* Helper for Notifications */
+	sendNotification: function (agentName, count, errors) {
+		let url = PropertiesService.getScriptProperties().getProperty('NOTIFICATION_WEBHOOK');
+		if (!url) return;
+
+		const message = `Agent "${agentName}" finished. Processed: ${count}. Errors: ${errors}.`;
+
+		// Append message to URL Query String
+		const separator = url.includes('?') ? '&' : '?';
+		url += separator + 'message=' + encodeURIComponent(message);
+
+		try {
+			// Lightweight services often prefer URL params. We keep it as POST.
+			UrlFetchApp.fetch(url, {
+				method: 'post'
+			});
+		} catch (e) {
+			console.warn("Failed to send notification: " + e.toString());
+		}
 	},
 
 	/**

@@ -8,6 +8,7 @@ function onOpen() {
 
   const configMenu = ui.createMenu('Configuration')
     .addItem('Configure Gemini API', 'menuConfigureAPI')
+    .addItem('Configure Notifications', 'menuConfigureNotifications') // New
     .addItem('Get Webhook Config', 'menuWebhookConfig')
     .addItem('Generate Webhook for Current Agent', 'menuGetAgentWebhook')
     .addItem('Purge Cache', 'menuPurgeCache');
@@ -35,56 +36,81 @@ function menuSetup() {
  */
 function menuClipboardInput() {
   const sheet = SpreadsheetApp.getActiveSheet();
-  const agentName = sheet.getName();
-  Setup.showClipboardInput(agentName);
+  const range = sheet.getActiveRange();
+
+  if (!range) {
+    SpreadsheetApp.getUi().alert('Please select a cell first.');
+    return;
+  }
+
+  const sheetName = sheet.getName();
+  const rangeA1 = range.getA1Notation();
+
+  // Pass details to Setup
+  Setup.showClipboardInput(sheetName, rangeA1);
 }
 
 /**
  * Client-Side Handler: Process Clipboard Input
  */
-function handleClipboardInput(agentName, text) {
+/**
+ * Client-Side Handler: Process Clipboard Input
+ */
+/**
+ * Client-Side Handler: Process Clipboard Input
+ */
+function handleClipboardInput(sheetName, rangeA1, text, appendMode) {
   try {
     if (!text) throw new Error("Input is empty.");
+    if (!sheetName || !rangeA1) throw new Error("Target cell information missing.");
 
-    // Validate Agent
-    if (!Orchestrator.isAgent(agentName)) throw new Error("Current sheet is not a valid Agent.");
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const sheet = ss.getSheetByName(sheetName);
+    if (!sheet) throw new Error(`Sheet "${sheetName}" not found.`);
+
+    const range = sheet.getRange(rangeA1);
+
+    let existingInput = '';
+
+    // Append Logic
+    if (appendMode) {
+      existingInput = range.getValue().toString();
+    }
 
     let inputVal = text;
 
-    // Cache if Large (>45k)
-    if (text.length > 45000) {
-      inputVal = DriveService.saveToCache(agentName, text);
+    if (appendMode && existingInput) {
+      // Combine
+      const combinedText = existingInput + '\n\n' + text;
+
+      // Cache if Combined is Large
+      if (combinedText.length > 45000) {
+        inputVal = DriveService.saveToCache(sheetName, combinedText);
+      } else {
+        inputVal = combinedText;
+      }
+    } else {
+      // Overwrite / New Logic
+      if (text.length > 45000) {
+        inputVal = DriveService.saveToCache(sheetName, text);
+      }
     }
 
-    // Insert Row
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
-    const sheet = ss.getSheetByName(agentName);
-    const headers = Utilities_Helper.getHeadersIndices(sheet);
-
-    if (!headers['Job ID'] || !headers['Input']) throw new Error("Sheet missing required headers.");
-
-    const lastCol = sheet.getLastColumn();
-    const newRowData = new Array(lastCol).fill('');
-    const jobId = Utilities_Helper.generateGUID();
-
-    // Helper to map 1-based header index to 0-based array index
-    const setCol = (name, val) => {
-      if (headers[name]) newRowData[headers[name] - 1] = val;
-    };
-
-    setCol('Job ID', jobId);
-    setCol('Input', inputVal);
-    setCol('Process State', ''); // Ready for processing
-
-    sheet.appendRow(newRowData);
+    // Write to Range
+    range.setValue(inputVal);
     SpreadsheetApp.flush();
 
-    return { success: true, message: "Row added successfully!" + (text.length > 45000 ? " (Cached to Drive)" : "") };
+    return {
+      success: true,
+      message: "Data pasted successfully!" + (inputVal.length > 45000 || inputVal.includes('https://') ? " (Cached/Linked)" : "")
+    };
 
   } catch (e) {
     return { success: false, message: e.toString() };
   }
 }
+
+
 
 /**
  * Menu Handler: Generate Webhook for Current Agent
@@ -115,6 +141,20 @@ function saveApiKey(key) {
  */
 function menuWebhookConfig() {
   Setup.manageWebhookSecret();
+}
+
+/**
+ * Menu Handler: Notification Config
+ */
+function menuConfigureNotifications() {
+  Setup.showNotificationDialog();
+}
+
+/**
+ * Client-Side Handler: Save Notification Webhook
+ */
+function saveNotificationWebhook(url) {
+  Setup.saveNotificationWebhook(url);
 }
 
 /**

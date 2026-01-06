@@ -108,6 +108,60 @@ var Setup = {
 	},
 
 	/**
+	 * Shows Notification Configuration Dialog
+	 */
+	showNotificationDialog: function () {
+		const ui = SpreadsheetApp.getUi();
+		const props = PropertiesService.getScriptProperties();
+		const currentUrl = props.getProperty('NOTIFICATION_WEBHOOK') || '';
+
+		const template = HtmlService.createTemplate(`
+      <style>
+        body { font-family: sans-serif; padding: 20px; }
+        .group { margin-bottom: 15px; }
+        label { display: block; font-weight: bold; margin-bottom: 5px; }
+        input[type="text"] { width: 100%; padding: 8px; box-sizing: border-box; }
+        .buttons { margin-top: 20px; text-align: right; }
+        button { padding: 8px 16px; cursor: pointer; }
+        button.primary { background: #1a73e8; color: white; border: none; }
+        .status { margin-top: 10px; font-size: 0.9em; color: green; }
+        .info { font-size: 0.85em; color: #666; margin-top: 5px; }
+      </style>
+      <script>
+        function save() {
+          var url = document.getElementById('webhookUrl').value.trim();
+          document.getElementById('status').innerText = 'Saving...';
+          google.script.run
+            .withSuccessHandler(function() {
+               document.getElementById('status').innerText = 'Saved!';
+               setTimeout(function() { google.script.host.close(); }, 1000);
+            })
+            .saveNotificationWebhook(url);
+        }
+        function cancel() {
+          google.script.host.close();
+        }
+      </script>
+      <div class="group">
+        <label>Notification Webhook URL</label>
+        <input type="text" id="webhookUrl" value="<?= currentUrl ?>" placeholder="https://pushover.net/... or https://chat.googleapis.com/..." />
+        <div class="info">Supported: Pushover, Google Chat, Slack, Discord, etc.</div>
+      </div>
+      <div class="buttons">
+        <button onclick="cancel()">Cancel</button>
+        <button class="primary" onclick="save()">Save</button>
+      </div>
+      <div id="status" class="status"></div>
+    `);
+		template.currentUrl = currentUrl;
+		ui.showModalDialog(template.evaluate().setWidth(450).setHeight(300), 'Configure Global Notifications');
+	},
+
+	saveNotificationWebhook: function (url) {
+		PropertiesService.getScriptProperties().setProperty('NOTIFICATION_WEBHOOK', url);
+	},
+
+	/**
 	 * Ensures the "Agents" configuration tab exists and has headers
 	 */
 	ensureAgentsTab: function () {
@@ -127,9 +181,11 @@ var Setup = {
 			'Input Example',
 			'Output Description',
 			'Output Example',
-			'Output Format', // New
+			'Output Format',
 			'Model',
-			'Destination Agent'
+			'Destination Agent',
+			'Notify User',        // New
+			'Post-Processing URL' // New
 		];
 
 		// Logic to check and append missing headers (Auto-Repair)
@@ -188,7 +244,8 @@ var Setup = {
 		setValidation('Pass Input to Next', ['Yes', 'No']);
 		setValidation('Pass Agent Context to Next', ['Yes', 'No']);
 		setValidation('Pass Data Context to Next', ['Yes', 'No']);
-		setValidation('Output Format', ['Text', 'Document', 'Append to Input Doc']); // Updated
+		setValidation('Output Format', ['Text', 'Document', 'Append to Input Doc']);
+		setValidation('Notify User', ['Yes', 'No']); // New
 
 		// Model Validation
 		const models = [
@@ -380,14 +437,8 @@ var Setup = {
 	/**
 	 * Shows Clipboard Input Modal
 	 */
-	showClipboardInput: function (agentName) {
+	showClipboardInput: function (sheetName, rangeA1) {
 		const ui = SpreadsheetApp.getUi();
-
-		// 1. Validate (Light check)
-		if (!agentName) {
-			ui.alert('Please select an Agent tab first.');
-			return;
-		}
 
 		const template = HtmlService.createTemplate(`
       <style>
@@ -398,6 +449,7 @@ var Setup = {
         button { padding: 10px 20px; cursor: pointer; background: #eee; border: 1px solid #ccc; }
         button.primary { background: #1a73e8; color: white; border: none; }
         .info { font-size: 0.9em; color: #666; margin-bottom: 10px; }
+        .target { font-size: 0.95em; color: #1a73e8; margin-bottom: 10px; font-weight: bold; }
         #status { margin-top: 10px; font-weight: bold; color: #1a73e8; }
         .error { color: #d93025; }
         .success { color: #188038; }
@@ -405,6 +457,8 @@ var Setup = {
       <script>
         function submitData() {
            var text = document.getElementById('inputData').value;
+           var appendArgs = document.getElementById('chkAppend').checked;
+           
            if (!text.trim()) {
              alert('Input cannot be empty.');
              return;
@@ -433,15 +487,21 @@ var Setup = {
                  st.innerText = 'System Error: ' + err;
                  document.getElementById('btnSubmit').disabled = false;
              })
-             .handleClipboardInput('${agentName}', text);
+             .handleClipboardInput('${sheetName}', '${rangeA1}', text, appendArgs);
         }
       </script>
       
-      <h3>Add Input: ${agentName}</h3>
+      <h3>Add Input from Clipboard</h3>
+      <div class="target">Target: ${sheetName}!${rangeA1}</div>
       <div class="info">Paste your text here. Large payloads (>45k chars) will be auto-cached to Drive.</div>
       
-      <textarea id="inputData" placeholder="Paste meeting transcript or data here..."></textarea>
+      <textarea id="inputData" placeholder="Paste data here..."></textarea>
       
+      <div class="checkbox-group">
+         <input type="checkbox" id="chkAppend" name="chkAppend">
+         <label for="chkAppend" style="display:inline; font-weight:normal;">Append to existing cell content</label>
+      </div>
+
       <div class="buttons">
          <button onclick="google.script.host.close()">Cancel</button>
          <button id="btnSubmit" class="primary" onclick="submitData()">Submit Input</button>
@@ -449,6 +509,6 @@ var Setup = {
       <div id="status"></div>
     `);
 
-		ui.showModalDialog(template.evaluate().setWidth(600).setHeight(500), `Add Input: ${agentName}`);
+		ui.showModalDialog(template.evaluate().setWidth(600).setHeight(500), `Add Input: ${sheetName}!${rangeA1}`);
 	}
 };

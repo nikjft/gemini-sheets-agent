@@ -70,7 +70,9 @@ var Utilities_Helper = {
 			outputExample: getIdx('Output Example'),
 			outputFormat: getIdx('Output Format'),
 			model: getIdx('Model'),
-			destination: getIdx('Destination Agent')
+			destination: getIdx('Destination Agent'),
+			notifyUser: getIdx('Notify User'),
+			postProcessingUrl: getIdx('Post-Processing URL')
 		};
 
 		for (let i = 1; i < data.length; i++) {
@@ -94,7 +96,9 @@ var Utilities_Helper = {
 					outputExample: row[indices.outputExample],
 					outputFormat: row[indices.outputFormat] || 'Text', // Default to Text
 					model: row[indices.model],
-					destination: row[indices.destination]
+					destination: row[indices.destination],
+					notifyUser: getVal(indices.notifyUser),
+					postProcessingUrl: getVal(indices.postProcessingUrl)
 				};
 			}
 		}
