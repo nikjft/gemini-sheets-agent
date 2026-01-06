@@ -251,5 +251,54 @@ var DriveService = {
 			}
 		}
 		return deletedCount;
+	},
+
+	/**
+	 * Appends Markdown-style text to an existing Google Doc.
+	 */
+	appendMarkdownToDocument: function (docId, content) {
+		const doc = DocumentApp.openById(docId);
+		const body = doc.getBody();
+
+		// Add a separator
+		body.appendHorizontalRule();
+		body.appendParagraph(`\n--- Append: ${new Date().toLocaleString()} ---\n`).setHeading(DocumentApp.ParagraphHeading.SUBTITLE);
+
+		// Split by lines to process simple markdown
+		const lines = content.split('\n');
+		let inList = false;
+
+		lines.forEach(line => {
+			let text = line.trim();
+
+			// Headers
+			if (text.startsWith('# ')) {
+				body.appendParagraph(text.substring(2)).setHeading(DocumentApp.ParagraphHeading.HEADING1);
+				inList = false;
+			} else if (text.startsWith('## ')) {
+				body.appendParagraph(text.substring(3)).setHeading(DocumentApp.ParagraphHeading.HEADING2);
+				inList = false;
+			} else if (text.startsWith('### ')) {
+				body.appendParagraph(text.substring(4)).setHeading(DocumentApp.ParagraphHeading.HEADING3);
+				inList = false;
+			}
+			// Bullet Points
+			else if (text.startsWith('* ') || text.startsWith('- ')) {
+				const listItem = body.appendListItem(text.substring(2));
+				listItem.setGlyphType(DocumentApp.GlyphType.BULLET);
+				inList = true;
+			}
+			// Normal Text
+			else {
+				if (text.length > 0) {
+					const p = body.appendParagraph(text);
+					p.setHeading(DocumentApp.ParagraphHeading.NORMAL);
+				}
+				inList = false;
+			}
+		});
+
+		doc.saveAndClose();
+		return doc.getUrl();
 	}
 };

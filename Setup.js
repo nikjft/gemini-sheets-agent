@@ -188,7 +188,7 @@ var Setup = {
 		setValidation('Pass Input to Next', ['Yes', 'No']);
 		setValidation('Pass Agent Context to Next', ['Yes', 'No']);
 		setValidation('Pass Data Context to Next', ['Yes', 'No']);
-		setValidation('Output Format', ['Text', 'Document']); // New
+		setValidation('Output Format', ['Text', 'Document', 'Append to Input Doc']); // Updated
 
 		// Model Validation
 		const models = [

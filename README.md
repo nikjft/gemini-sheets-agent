@@ -134,9 +134,22 @@ If you have a large text (like a transcript) on your clipboard:
 3.  Paste the text into the box and click **Submit**.
     *   If the text is huge (>45k chars), it will automatically be cached to Drive.
 
+### 5. Append to Existing Document
+You can have an agent add text to an existing Google Doc (e.g., adding a summary to meeting notes) instead of creating a new file.
+1.  In the **Agents** tab, set **Output Format** to `Append to Input Doc`.
+2.  Ensure the **Input** for that agent is a **Google Doc URL**.
+3.  The agent will append its output to the bottom of that document with a timestamp header.
+
 ## Advanced Features
 
-### Dynamic Routing
+### 1. Safe Handoffs (Auto-Caching)
+If an agent produces a massive output (>45k chars) that needs to be passed to the next agent:
+*   The system automatically saves it to Drive Cache.
+*   The **File URL** is passed to the next agent.
+*   The next agent automatically reads the file content.
+*   **Result**: No "Cell limit exceeded" errors for complex chains.
+
+### 2. Dynamic Routing
 If you enter instructions in the `Destination Agent` field, the agent becomes a **Router**.
 *   **Example**: "If sentiment is positive route to Happy Response, else route to Apology."
 *   The agent output will contain a routing tag (e.g. `>> ROUTE: Apology`).

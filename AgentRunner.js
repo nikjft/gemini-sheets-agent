@@ -101,6 +101,8 @@ var AgentRunner = {
 			let inputVal = row[headers['Input'] - 1];
 			if (!inputVal) continue; // Skip empty rows
 
+			const originalInput = inputVal; // Capture for potential Append Mode
+
 			// Process Input for Drive Context (e.g. if Input is a Doc URL)
 			inputVal = DriveService.processContext(inputVal);
 
@@ -176,6 +178,8 @@ ${inputVal}
 
 				// Document Creation Logic
 				// Uses the CLEANED `finalOutput` text.
+				// Document Creation Logic
+				// Uses the CLEANED `finalOutput` text.
 				if (config.outputFormat === 'Document') {
 					const docTitle = `${config.name} Output - ${jobId}`;
 					try {
@@ -185,6 +189,28 @@ ${inputVal}
 					} catch (e) {
 						console.error(`Failed to create document: ${e.toString()}`);
 						finalOutput += `\n[ERROR: Failed to create Google Doc. Raw output preserved.]`;
+					}
+				} else if (config.outputFormat === 'Append to Input Doc') {
+					try {
+						// Extract Doc ID from original input (must be a URL)
+						const urls = DriveService.extractDriveUrls(originalInput);
+						let docUrl = null;
+
+						if (urls.length > 0 && urls[0].url.includes('/document/')) {
+							const docId = urls[0].id;
+							docUrl = DriveService.appendMarkdownToDocument(docId, finalOutput);
+							console.log(`Appended to Document: ${docUrl}`);
+							finalOutput = docUrl; // Overwrite val
+						} else {
+							// Fallback: Create new if input wasn't a doc
+							console.warn('Output format is Append, but Input was not a Doc URL. Creating new doc instead.');
+							const docTitle = `${config.name} Output - ${jobId}`;
+							docUrl = DriveService.createDocumentFromMarkdown(docTitle, finalOutput);
+							finalOutput = docUrl;
+						}
+					} catch (e) {
+						console.error(`Failed to append to document: ${e.toString()}`);
+						finalOutput += `\n[ERROR: Failed to append to Doc. Raw output preserved.]`;
 					}
 				}
 
@@ -336,7 +362,21 @@ ${config.outputDesc || 'N/A'}
 		};
 
 		setVal('Job ID', jobId);
-		setVal('Input', currentOutput); // The output of current is input of next
+
+		// Safe Payload Handoff > 45k chars
+		let nextInput = currentOutput;
+		if (nextInput && nextInput.length > 45000) {
+			try {
+				// Use the Destination Agent's name for the cache file prefix
+				nextInput = DriveService.saveToCache(config.destination, currentOutput);
+				console.log(`Large payload cached for handoff: ${nextInput}`);
+			} catch (e) {
+				console.error(`Failed to cache handoff payload: ${e.toString()}`);
+				// We proceed with raw text, hoping it fits or user handles error
+			}
+		}
+
+		setVal('Input', nextInput); // The output of current is input of next
 		setVal('Context', nextContext);
 		// Ensure Process State is empty so it gets picked up
 		setVal('Process State', '');
