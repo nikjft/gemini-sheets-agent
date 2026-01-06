@@ -17,10 +17,12 @@ function onOpen() {
     .addItem('Run automated agents', 'menuRunAll')
     .addItem('Run current agent', 'menuRunCurrent')
     .addItem('Re-process selected row', 'menuProcessSelected')
-    .addItem('Add Input from Clipboard', 'menuClipboardInput') // New
+    .addItem('Add Input from Clipboard', 'menuClipboardInput')
     .addSeparator()
     .addItem('Set Up Agents', 'menuSetup')
     .addSubMenu(configMenu)
+    .addSeparator()
+    .addItem('Help', 'menuHelp')
     .addToUi();
 }
 
@@ -350,4 +352,22 @@ function menuProcessSelected() {
   // Add 5 minute timeout safety
   AgentRunner.runAgent(agentName, Date.now(), 1000 * 60 * 5);
   SpreadsheetApp.getActiveSpreadsheet().toast('Processing complete.', 'Success');
+}
+
+/**
+ * Menu Handler: Help
+ */
+function menuHelp() {
+  const html = HtmlService.createHtmlOutput(`
+    <style>body { font-family: sans-serif; padding: 15px; text-align: center; }</style>
+    <h3>Gemini Sheets Agent</h3>
+    <p>View source code, documentation, and report issues on GitHub:</p>
+    <p><a href="https://github.com/nikjft/gemini-sheets-agent" target="_blank">https://github.com/nikjft/gemini-sheets-agent</a></p>
+    <div style="margin-top: 20px;">
+      <button onclick="google.script.host.close()">Close</button>
+    </div>
+  `)
+    .setWidth(400)
+    .setHeight(200);
+  SpreadsheetApp.getUi().showModalDialog(html, 'Help');
 }

@@ -128,11 +128,13 @@ If you send a payload larger than **45,000 characters** (e.g. long meeting notes
 *   Default is to delete files older than 7 days.
 
 ### 4. Clipboard Input (Large Texts)
-If you have a large text (like a transcript) on your clipboard:
-1.  Go to the Agent tab you want to add data to.
+If you have a large text (like a transcript) on your clipboard and want to paste it into a specific cell:
+1.  **Select the Target Cell** in any sheet (e.g., an Agent's Input column).
 2.  Click **Agent Orchestrator** > **Add Input from Clipboard**.
-3.  Paste the text into the box and click **Submit**.
-    *   If the text is huge (>45k chars), it will automatically be cached to Drive.
+3.  The modal will confirm your target (e.g. `Agents!C5`).
+4.  Paste the text into the box and click **Submit**.
+    *   **Append Mode**: Check the "Append" box to add your text to the existing cell content (useful for combining multiple transcripts).
+    *   **Large Payload**: If the text is huge (>45k chars), it is automatically cached to Drive and linked.
 
 ### 6. Global Notifications (Toast)
 Receive a simple notification when an Agent finishes a batch.
