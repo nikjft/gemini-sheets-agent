@@ -110,12 +110,14 @@ var Setup = {
 				'Lorem ipsum...',
 				'A brief summary',
 				'It was a text about Lorem.',
-				'gemini-1.5-flash',
+				'gemini-2.0-flash-exp',
 				''
 			];
 			sheet.appendRow(exampleRow);
 
 			console.log('Created Agents tab.');
+		} else {
+			console.log('Agents tab already exists. Skipping creation to preserve data.');
 		}
 	},
 
@@ -144,10 +146,14 @@ var Setup = {
 
 			if (!sheet) {
 				sheet = ss.insertSheet(agentName);
+				// Important: setValues requires a 2D array [[h1, h2, h3]]
 				sheet.getRange(1, 1, 1, dataHeaders.length).setValues([dataHeaders]);
 				sheet.getRange(1, 1, 1, dataHeaders.length).setFontWeight('bold');
 				sheet.setFrozenRows(1);
+				SpreadsheetApp.flush(); // Force write
 				console.log(`Created data tab for agent: ${agentName}`);
+			} else {
+				console.log(`Data tab for agent "${agentName}" already exists. Skipping creation.`);
 			}
 		}
 	}

@@ -58,6 +58,7 @@ This project allows you to orchestrate multi-agent workflows directly within Goo
 2.  Click **Agent Orchestrator** > **Set Up Agents**.
 3.  Enter your **Gemini API Key** when prompted.
 4.  The script will automatically create the `Agents` tab and an example configuration.
+5.  **Important**: When running for the first time with the new Drive integration, Google will ask for permissions to access Drive, Docs, and Sheets. This is required to fetch context from your files.
 
 ### Defining an Agent
 
@@ -65,7 +66,8 @@ This project allows you to orchestrate multi-agent workflows directly within Goo
     *   **Agent Name**: `Summarizer`
     *   **Auto-Run**: `Yes`
     *   **Prompt Core**: `Summarize the input text.`
-    *   **Model**: `gemini-1.5-flash`
+    *   **Context Field**: You can now paste links to Google Docs, Sheets, or Drive files here! The content will be automatically read and appended.
+    *   **Model**: `gemini-2.0-flash-exp`
     *   **Destination Agent**: `EmailDraft` (optional)
 2.  Run **Agent Orchestrator** > **Set Up Agents** again. It will detect the new agent in the config and automatically create the `Summarizer` data tab with the correct headers.
 

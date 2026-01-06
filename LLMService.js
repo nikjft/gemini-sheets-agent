@@ -17,12 +17,18 @@ var LLMService = {
 		// 1. If it starts with "gemini-", assume it's a valid API name and use it directly.
 		// 2. Otherwise, map common friendly names.
 		let apiModel = modelId.trim();
+
+		// Strip "models/" prefix if user included it
+		if (apiModel.startsWith('models/')) {
+			apiModel = apiModel.replace('models/', '');
+		}
+
 		const lowerModel = apiModel.toLowerCase();
 
 		if (!lowerModel.startsWith('gemini-')) {
-			if (lowerModel.includes('flash')) apiModel = 'gemini-1.5-flash';
-			else if (lowerModel.includes('pro')) apiModel = 'gemini-1.5-pro';
-			else apiModel = 'gemini-1.5-flash'; // Fallback
+			if (lowerModel.includes('flash')) apiModel = 'gemini-2.0-flash-exp';
+			else if (lowerModel.includes('pro')) apiModel = 'gemini-1.5-pro-002';
+			else apiModel = 'gemini-2.0-flash-exp'; // Fallback
 		}
 
 		const url = `https://generativelanguage.googleapis.com/v1beta/models/${apiModel}:generateContent?key=${apiKey}`;

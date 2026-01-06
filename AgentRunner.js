@@ -17,7 +17,9 @@ var AgentRunner = {
 		const ss = SpreadsheetApp.getActiveSpreadsheet();
 		const sheet = ss.getSheetByName(agentName);
 		if (!sheet) {
-			console.log(`Sheet not found for agent: ${agentName}`);
+			const msg = `Sheet not found for agent: ${agentName}. Please run "Agent Orchestrator > Set Up Agents" to generate it.`;
+			console.error(msg);
+			SpreadsheetApp.getActiveSpreadsheet().toast(msg, 'Error', 10);
 			return false;
 		}
 
@@ -28,7 +30,9 @@ var AgentRunner = {
 		// Simple validation
 		for (const h of requiredHeaders) {
 			if (!headers[h]) {
-				console.log(`Missing required header "${h}" in sheet ${agentName}`);
+				const msg = `Missing required header "${h}" in sheet ${agentName}. Please run "Agent Orchestrator > Set Up Agents" to fix it.`;
+				console.error(msg);
+				SpreadsheetApp.getActiveSpreadsheet().toast(msg, 'Error', 10);
 				return false;
 			}
 		}
@@ -100,7 +104,9 @@ var AgentRunner = {
 			}
 
 			// Prepare Context
-			const rowContext = row[headers['Context'] - 1] || '';
+			let rowContext = row[headers['Context'] - 1] || '';
+			// Expand Drive Links in Data Context
+			rowContext = DriveService.processContext(rowContext);
 
 			// Construct Prompt
 			const systemPrompt = this.constructSystemPrompt(config, goodExamples, badExamples);
@@ -121,8 +127,6 @@ ${inputVal}
 				sheet.getRange(rowIndex, headers['Process State']).setValue('Completed');
 
 				// Handoff to Next Agent
-				// NOTE: We do NOT trigger the next agent recursively to avoid call stack depth / timeout issues.
-				// We just append the data. The Orchestrator loop (or next trigger) will pick it up.
 				if (config.destination) {
 					this.handoffToNextAgent(ss, config, jobId, inputVal, rowContext, result.text);
 				}
@@ -144,12 +148,15 @@ ${inputVal}
 	 * Constructs the System Prompt based on configuration and examples
 	 */
 	constructSystemPrompt: function (config, goodExamples, badExamples) {
+		// Expand Drive Links in Agent Configuration Context
+		const agentContext = DriveService.processContext(config.contextInstructions || '');
+
 		let prompt = `
 You are an AI agent named "${config.name}".
 Your Goal: ${config.prompt}
 
 INSTRUCTIONS:
-${config.contextInstructions || ''}
+${agentContext}
 
 INPUT DESCRIPTION:
 ${config.inputDesc || 'N/A'}
