@@ -8,66 +8,103 @@ var Setup = {
 	/**
 	 * Main Setup Entry Point
 	 */
+	/**
+	 * Main Setup Entry Point
+	 */
 	runSetup: function () {
 		const ui = SpreadsheetApp.getUi();
 
-		// 1. API Key Setup
-		const apiKeySet = this.manageApiKey(ui);
-		if (!apiKeySet) {
-			ui.alert('Setup cancelled or API Key not provided.');
-			return;
-		}
-
-		// 2. Agents Tab Setup
+		// 1. Agents Tab Setup
 		this.ensureAgentsTab();
 
-		// 3. Data Tabs Setup
+		// 2. Data Tabs Setup
 		this.ensureDataTabs();
 
-		ui.alert('Setup Complete! You can now configure your agents in the "Agents" tab.');
+		// 3. Configuration Check (Warn if missing)
+		const props = PropertiesService.getScriptProperties();
+		const apiKey = props.getProperty('GEMINI_API_KEY');
+		const webhook = props.getProperty('WEBHOOK_SECRET');
+
+		let msg = 'Setup Complete! You can now configure your agents in the "Agents" tab.';
+		if (!apiKey) {
+			msg += '\n\n[!] Gemini API Key is missing. Please use "Agent Orchestrator > Configuration > Configure Gemini API".';
+		}
+		if (!webhook) {
+			msg += '\n\n[!] Webhook Secret is not configured. use "Agent Orchestrator > Configuration > Get Webhook Config" if needed.';
+		}
+
+		ui.alert(msg);
 	},
 
 	/**
-	 * Manages the API Key prompt and storage
+	 * Shows HTML Dialog for API Key Configuration
 	 */
-	manageApiKey: function (ui) {
+	showApiKeyDialog: function () {
+		const ui = SpreadsheetApp.getUi();
 		const props = PropertiesService.getScriptProperties();
 		const currentKey = props.getProperty('GEMINI_API_KEY');
 
-		let shouldPrompt = true;
-
-		if (currentKey) {
-			const response = ui.alert(
-				'API Key Configuration',
-				'An API Key is already saved. Do you want to overwrite it?',
-				ui.ButtonSet.YES_NO
-			);
-			if (response === ui.Button.NO) {
-				shouldPrompt = false;
-			}
+		// Mask key for display
+		let displayKey = '';
+		if (currentKey && currentKey.length > 4) {
+			displayKey = currentKey.substring(0, 4) + '••••••••••••••••';
 		}
 
-		if (shouldPrompt) {
-			const prompt = ui.prompt(
-				'Enter Gemini API Key',
-				'Please paste your Vertex AI or Gemini API Key:',
-				ui.ButtonSet.OK_CANCEL
-			);
+		const template = HtmlService.createTemplate(`
+      <style>
+        body { font-family: sans-serif; padding: 20px; }
+        .group { margin-bottom: 15px; }
+        label { display: block; font-weight: bold; margin-bottom: 5px; }
+        input[type="text"] { width: 100%; padding: 8px; box-sizing: border-box; }
+        .buttons { margin-top: 20px; text-align: right; }
+        button { padding: 8px 16px; cursor: pointer; }
+        button.primary { background: #1a73e8; color: white; border: none; }
+        .status { margin-top: 10px; font-size: 0.9em; color: green; }
+      </style>
+      <script>
+        function save() {
+          var key = document.getElementById('apiKey').value.trim();
+          if (!key) {
+             alert('Please enter a key.');
+             return;
+          }
+          document.getElementById('status').innerText = 'Saving...';
+          google.script.run
+            .withSuccessHandler(function() {
+               document.getElementById('status').innerText = 'Saved!';
+               setTimeout(function() { google.script.host.close(); }, 1000);
+            })
+            .saveApiKey(key);
+        }
+        function cancel() {
+          google.script.host.close();
+        }
+      </script>
+      <div class="group">
+        <label>Current Status</label>
+        <div>${displayKey ? 'Key Saved: ' + displayKey : 'No Key Configured'}</div>
+      </div>
+      <div class="group">
+        <label>Enter New API Key</label>
+        <input type="text" id="apiKey" placeholder="Paste Gemini API Key here" />
+      </div>
+      <div class="buttons">
+        <button onclick="cancel()">Cancel</button>
+        <button class="primary" onclick="save()">Save</button>
+      </div>
+      <div id="status" class="status"></div>
+    `);
 
-			if (prompt.getSelectedButton() === ui.Button.OK) {
-				const key = prompt.getResponseText().trim();
-				if (key) {
-					props.setProperty('GEMINI_API_KEY', key);
-					return true;
-				} else {
-					return false; // User clicked OK but entered nothing
-				}
-			} else {
-				return false; // User clicked Cancel
-			}
+		ui.showModalDialog(template.evaluate().setWidth(400).setHeight(350), 'Configure Gemini API');
+	},
+
+	/**
+	 * Helper to save key (called by Code.js global function)
+	 */
+	saveApiKey: function (key) {
+		if (key) {
+			PropertiesService.getScriptProperties().setProperty('GEMINI_API_KEY', key);
 		}
-
-		return true; // Key exists and user chose not to change, or key updated successfully
 	},
 
 	/**
@@ -155,11 +192,12 @@ var Setup = {
 
 		// Model Validation
 		const models = [
-			'gemini-2.0-flash-exp',
-			'gemini-1.5-flash',
-			'gemini-1.5-flash-8b',
-			'gemini-1.5-pro',
-			'gemini-1.5-pro-002'
+			'gemini-2.5-flash',
+			'gemini-2.5-pro',
+			'gemini-3-flash-preview',
+			'gemini-3-pro-preview',
+			'gemini-2.0-flash-exp', // Keeping previous default as fallback option
+			'gemini-1.5-flash'
 		];
 		setValidation('Model', models);
 	},
@@ -210,5 +248,132 @@ var Setup = {
 				console.log(`Data tab for agent "${agentName}" checked/updated.`);
 			}
 		}
+	},
+
+	/**
+	 * Manages the Webhook Secret Token
+	 */
+	manageWebhookSecret: function () {
+		const ui = SpreadsheetApp.getUi();
+		const props = PropertiesService.getScriptProperties();
+		let secret = props.getProperty('WEBHOOK_SECRET');
+
+		if (!secret) {
+			// Generate new if missing
+			secret = Utilities_Helper.generateGUID();
+			props.setProperty('WEBHOOK_SECRET', secret);
+		}
+
+		const template = HtmlService.createTemplate(`
+      <style>
+        body { font-family: sans-serif; padding: 10px; }
+        .token { background: #f0f0f0; padding: 10px; border: 1px solid #ccc; font-family: monospace; word-break: break-all; }
+        .warning { color: #d93025; font-size: 0.9em; margin-top: 10px; }
+      </style>
+      <h3>Webhook Configuration</h3>
+      <p>Use this Secret Token to authenticate requests to your Web App.</p>
+      <div class="token"><?= secret ?></div>
+      <p><strong>URL:</strong> You must Deploy this script as a Web App to get the URL.</p>
+      <div class="warning">Keep this token secret! Anyone with it can add data to your sheets.</div>
+    `);
+		template.secret = secret;
+
+		// We use a modal dialog so they can copy/paste easily
+		ui.showModalDialog(template.evaluate().setWidth(400).setHeight(300), 'Webhook Config');
+	},
+
+	/**
+	 * Shows Agent-Specific Webhook Generator
+	 */
+	showAgentWebhookDialog: function (agentName) {
+		const ui = SpreadsheetApp.getUi();
+		const props = PropertiesService.getScriptProperties();
+
+		// 1. Validate Agent
+		let configs;
+		try {
+			configs = Utilities_Helper.getAgentsConfiguration();
+		} catch (e) {
+			ui.alert('Could not read agent configuration. Please run Setup first.');
+			return;
+		}
+
+		if (!configs[agentName]) {
+			ui.alert('Current sheet is not a configured Agent. Please select an Agent tab.');
+			return;
+		}
+
+		// 2. Get Secrets & URL
+		let secret = props.getProperty('WEBHOOK_SECRET');
+		if (!secret) {
+			ui.alert('Webhook Secret not found. Please run "Agent Orchestrator > Get Webhook Config" first.');
+			return;
+		}
+
+		let url = '[your web app deployment URL]';
+
+		// 3. Get Example Input
+		const ss = SpreadsheetApp.getActiveSpreadsheet();
+		const sheet = ss.getSheetByName(agentName);
+		const headers = Utilities_Helper.getHeadersIndices(sheet);
+
+		let exampleInput = "Example Input Data";
+		// Try to get Row 2 Input
+		if (sheet.getLastRow() >= 2 && headers['Input']) {
+			const val = sheet.getRange(2, headers['Input']).getValue();
+			if (val) exampleInput = val;
+		} else if (configs[agentName].inputExample) {
+			exampleInput = configs[agentName].inputExample;
+		}
+
+		// 4. Construct JSON & CURL
+		// Escape quotes for JSON
+		const safeInput = JSON.stringify(exampleInput).slice(1, -1); // remove surrounding quotes from stringify
+
+		const jsonBody = JSON.stringify({
+			token: secret,
+			agentName: agentName,
+			input: exampleInput
+		}, null, 2);
+
+		const curlCmd = `curl -L -X POST -H "Content-Type: application/json" -d '${JSON.stringify({
+			token: secret,
+			agentName: agentName,
+			input: exampleInput
+		})}' "${url}"`;
+
+		// 5. Render HTML
+		const template = HtmlService.createTemplate(`
+      <style>
+        body { font-family: sans-serif; padding: 15px; }
+        .group { margin-bottom: 20px; }
+        label { display: block; font-weight: bold; margin-bottom: 5px; color: #333; }
+        textarea { width: 100%; height: 80px; padding: 10px; font-family: monospace; border: 1px solid #ccc; background: #f9f9f9; font-size: 12px; }
+        .note { font-size: 0.9em; color: #666; margin-top: 5px; }
+        .warning { color: #d93025; font-size: 0.9em; font-weight: bold; }
+      </style>
+      
+      <h3>Webhook Generator: ${agentName}</h3>
+      
+      <div class="group">
+        <label>JSON Payload (Zapier)</label>
+        <textarea readonly>${jsonBody}</textarea>
+        <div class="note">Use this in the "Body" of a POST request.</div>
+      </div>
+
+      <div class="group">
+        <label>CURL Command (Terminal Test)</label>
+        <textarea readonly>${curlCmd}</textarea>
+        <div class="note">Paste into Terminal to test immediately.</div>
+      </div>
+
+      <div class="group">
+        <label>Configuration Details</label>
+        <div class="note"><strong>URL:</strong> ${url}</div>
+        ${url.indexOf('[YOUR') !== -1 ? '<div class="warning">Warning: Script not deployed as Web App yet. URL is placeholder.</div>' : ''}
+      </div>
+    `);
+
+		ui.showModalDialog(template.evaluate().setWidth(500).setHeight(450), `Webhook: ${agentName}`);
 	}
 };

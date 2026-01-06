@@ -5,12 +5,19 @@
 
 function onOpen() {
   const ui = SpreadsheetApp.getUi();
+
+  const configMenu = ui.createMenu('Configuration')
+    .addItem('Configure Gemini API', 'menuConfigureAPI')
+    .addItem('Get Webhook Config', 'menuWebhookConfig')
+    .addItem('Generate Webhook for Current Agent', 'menuGetAgentWebhook');
+
   ui.createMenu('Agent Orchestrator')
     .addItem('Run automated agents', 'menuRunAll')
     .addItem('Run current agent', 'menuRunCurrent')
     .addItem('Re-process selected row', 'menuProcessSelected')
-    .addSeparator() // Optional separator for UI cleanliness
+    .addSeparator()
     .addItem('Set Up Agents', 'menuSetup')
+    .addSubMenu(configMenu)
     .addToUi();
 }
 
@@ -19,6 +26,112 @@ function onOpen() {
  */
 function menuSetup() {
   Setup.runSetup();
+}
+
+/**
+ * Menu Handler: Generate Webhook for Current Agent
+ */
+function menuGetAgentWebhook() {
+  const sheet = SpreadsheetApp.getActiveSheet();
+  const agentName = sheet.getName();
+  Setup.showAgentWebhookDialog(agentName);
+}
+
+/**
+ * Menu Handler: API Key Config
+ */
+function menuConfigureAPI() {
+  Setup.showApiKeyDialog();
+}
+
+/**
+ * Client-Side Handler: Save API Key
+ * Must be a global function to be called by google.script.run
+ */
+function saveApiKey(key) {
+  Setup.saveApiKey(key);
+}
+
+/**
+ * Menu Handler: Webhook Config
+ */
+function menuWebhookConfig() {
+  Setup.manageWebhookSecret();
+}
+
+/**
+ * Web App Entry Point: POST Requests
+ */
+function doPost(e) {
+  const output = { status: 'error', message: '' };
+
+  try {
+    // 1. Parse Payload
+    if (!e || !e.postData || !e.postData.contents) {
+      throw new Error('No POST data received.');
+    }
+
+    // Support both JSON and URL-encoded, but prefer JSON
+    const json = JSON.parse(e.postData.contents);
+    const token = json.token;
+    const agentName = json.agentName;
+    const input = json.input;
+
+    // 2. Security Check & Validation
+    const savedSecret = PropertiesService.getScriptProperties().getProperty('WEBHOOK_SECRET');
+    if (!savedSecret || token !== savedSecret) {
+      throw new Error('Unauthorized: Invalid or missing Token.');
+    }
+
+    if (!agentName) throw new Error('Missing "agentName".');
+    if (!input) throw new Error('Missing "input".');
+
+    // 3. Insert into Sheet
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const sheet = ss.getSheetByName(agentName);
+
+    if (!sheet) {
+      throw new Error(`Agent sheet "${agentName}" not found.`);
+    }
+
+    // Get Headers to find columns
+    const headers = Utilities_Helper.getHeadersIndices(sheet);
+    if (!headers['Job ID'] || !headers['Input']) {
+      throw new Error('Sheet missing required headers (Job ID, Input).');
+    }
+
+    // Prepare Row
+    const lastCol = sheet.getLastColumn();
+    const newRowData = new Array(lastCol).fill('');
+
+    const jobId = Utilities_Helper.generateGUID();
+
+    // Map fields
+    // NOTE: headers indices are 1-based, array is 0-based
+    const setVal = (name, val) => {
+      if (headers[name]) newRowData[headers[name] - 1] = val;
+    };
+
+    setVal('Job ID', jobId);
+    setVal('Input', input);
+    setVal('Process State', ''); // Empty state triggers processing
+
+    // Append
+    sheet.appendRow(newRowData);
+    SpreadsheetApp.flush();
+
+    // 4. Success Response
+    output.status = 'success';
+    output.jobId = jobId;
+    output.message = `Row inserted into ${agentName}.`;
+
+  } catch (error) {
+    output.message = error.toString();
+    console.error('Webhook Error: ' + error.toString());
+  }
+
+  return ContentService.createTextOutput(JSON.stringify(output))
+    .setMimeType(ContentService.MimeType.JSON);
 }
 
 /**

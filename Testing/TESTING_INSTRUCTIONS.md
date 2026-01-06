@@ -35,9 +35,9 @@ This folder contains CSV files to validate the **Gemini Sheets Agent**.
 2.  **Handoffs (Dynamic Routing)**:
     *   **ProposalWriter** should have 2 new rows (Acme, Stark).
     *   **RejectionSender** should have 1 new row (Mom & Pop).
-3.  **Document Creation**:
-    *   Run Orchestrator again (or wait for next trigger).
-    *   **ProposalWriter** should process its rows.
-    *   Look at the `Output` column for `ProposalWriter`. It should be a **URL** (e.g., `https://docs.google.com/document/d/...`).
-    *   Click the link. It should open a formatted Google Doc proposal.
-    *   **RejectionSender** should process its row and output a text email draft.
+3.  **Document Creation & Handoff**:
+    *   Run Orchestrator again.
+    *   **ProposalWriter** creates a Google Doc output.
+    *   **SalesAssignment** receives the Doc URL.
+    *   **SalesAssignment** reads the doc content and assigns Mary or Jim.
+    *   **RejectionSender** processes its row independently.

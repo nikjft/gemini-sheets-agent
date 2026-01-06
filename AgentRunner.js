@@ -14,6 +14,15 @@ var AgentRunner = {
 			return false;
 		}
 
+		// Runtime API Key Check
+		const apiKey = PropertiesService.getScriptProperties().getProperty('GEMINI_API_KEY');
+		if (!apiKey) {
+			const msg = `Gemini API Key is missing. Please select "Agent Orchestrator > Configure Gemini API" from the menu.`;
+			console.error(msg);
+			SpreadsheetApp.getActiveSpreadsheet().toast(msg, 'Error', 10);
+			return false;
+		}
+
 		const ss = SpreadsheetApp.getActiveSpreadsheet();
 		const sheet = ss.getSheetByName(agentName);
 		if (!sheet) {
@@ -125,44 +134,24 @@ ${inputVal}
 				let finalOutput = result.text;
 				let routedDestination = config.destination; // Default. If dynamic, this string is ignored/overwritten below.
 
-				// Document Creation Logic
-				if (config.outputFormat === 'Document') {
-					const docTitle = `${config.name} Output - ${jobId}`;
-					try {
-						const docUrl = DriveService.createDocumentFromMarkdown(docTitle, finalOutput);
-						console.log(`Created Document: ${docUrl}`);
-						finalOutput = docUrl; // Overwrite text with URL
-					} catch (e) {
-						console.error(`Failed to create document: ${e.toString()}`);
-						// Fallback: keep original text but warn
-						finalOutput += `\n[ERROR: Failed to create Google Doc. Raw output preserved.]`;
-					}
-				}
-
-				// Dynamic Routing Parsing
-				// Re-check if dynamic (Destination is not a static agent name)
+				// Dynamic Routing Parsing & Cleanup
+				// We parse the routing tag from the raw LLM output.
+				// If found, we STRIP it from the output so it doesn't appear in the Document, the Sheet, or the Handoff input.
 				const isStatic = configs[config.destination];
-
 				if (config.destination && !isStatic) {
-					// NOTE: If we converted output to a URL, we still need to parse the ORIGINAL text for routing tags!
-					// We should use `result.text` for parsing, not `finalOutput` (which might be a URL now).
 					const routeRegex = />> ROUTE: (.+)$/m;
-					const match = result.text.match(routeRegex);
+					const match = finalOutput.match(routeRegex);
 
 					if (match) {
 						const instruction = match[1].trim();
 						console.log(`Dynamic Routing Triggered: ${instruction}`);
 
-						// Cleanup Output (remove the route tag) FROM THE DOC CONTENT if possible?
-						// For "Level 1", we accepted that the route tag might be in the doc. 
-						// However, we can clean it from `finalOutput` if it's text.
-						// If it is a Doc, we already wrote the content. 
-						// Ideally, we clean `result.text` BEFORE creating the doc.
+						// GLOBAL CLEANUP: Remove tag from the text immediately
+						finalOutput = finalOutput.replace(routeRegex, '').trim();
 
 						if (instruction.toUpperCase() === 'STOP') {
-							routedDestination = null; // No handoff
+							routedDestination = null;
 						} else {
-							// Check if targeted agent exists
 							if (configs[instruction]) {
 								routedDestination = instruction;
 							} else {
@@ -170,6 +159,29 @@ ${inputVal}
 								routedDestination = null;
 							}
 						}
+					} else {
+						console.warn("Dynamic routing instruction present in usages but no ROUTE tag found.");
+						// Don't route if tag is missing but required by prompt instructions? 
+						// Safer to Stop or Default? Code implicitly defaults to nothing (STOP) if match fails and destination was instruction-based.
+						// Logic check: if `config.destination` was an instruction string, it won't match any static map key.
+						// So `routedDestination` (initially the instruction string) is NOT a valid agent name.
+						// handoffToNextAgent checks `ss.getSheetByName(destName)`. If destName is a long instruction string, sheet won't exist.
+						// So it effectively stops. Correct.
+						routedDestination = null;
+					}
+				}
+
+				// Document Creation Logic
+				// Uses the CLEANED `finalOutput` text.
+				if (config.outputFormat === 'Document') {
+					const docTitle = `${config.name} Output - ${jobId}`;
+					try {
+						const docUrl = DriveService.createDocumentFromMarkdown(docTitle, finalOutput);
+						console.log(`Created Document: ${docUrl}`);
+						finalOutput = docUrl; // Overwrite text with URL for Sheet/Handoff
+					} catch (e) {
+						console.error(`Failed to create document: ${e.toString()}`);
+						finalOutput += `\n[ERROR: Failed to create Google Doc. Raw output preserved.]`;
 					}
 				}
 
