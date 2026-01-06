@@ -119,6 +119,27 @@ var Setup = {
 		} else {
 			console.log('Agents tab already exists. Skipping creation to preserve data.');
 		}
+
+		// Apply Data Validation (Update everytime to ensure latest options)
+		// Column 2: Auto-Run (Yes/No)
+		const runRule = SpreadsheetApp.newDataValidation().requireValueInList(['Yes', 'No']).setAllowInvalid(true).build();
+		sheet.getRange("B2:B1000").setDataValidation(runRule);
+
+		// Column 5: Pass Context (Agent, Data, Both)
+		const contextRule = SpreadsheetApp.newDataValidation().requireValueInList(['Agent', 'Data', 'Both']).setAllowInvalid(true).build();
+		sheet.getRange("E2:E1000").setDataValidation(contextRule);
+
+		// Column 10: Model
+		const models = [
+			'gemini-2.0-flash-exp',
+			'gemini-1.5-flash',
+			'gemini-1.5-flash-8b',
+			'gemini-1.5-pro',
+			'gemini-1.5-pro-002'
+		];
+		const modelRule = SpreadsheetApp.newDataValidation().requireValueInList(models).setAllowInvalid(true).build();
+		sheet.getRange("J2:J1000").setDataValidation(modelRule);
+
 	},
 
 	/**
