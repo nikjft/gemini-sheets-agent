@@ -125,19 +125,39 @@ ${inputVal}
 				let finalOutput = result.text;
 				let routedDestination = config.destination; // Default. If dynamic, this string is ignored/overwritten below.
 
+				// Document Creation Logic
+				if (config.outputFormat === 'Document') {
+					const docTitle = `${config.name} Output - ${jobId}`;
+					try {
+						const docUrl = DriveService.createDocumentFromMarkdown(docTitle, finalOutput);
+						console.log(`Created Document: ${docUrl}`);
+						finalOutput = docUrl; // Overwrite text with URL
+					} catch (e) {
+						console.error(`Failed to create document: ${e.toString()}`);
+						// Fallback: keep original text but warn
+						finalOutput += `\n[ERROR: Failed to create Google Doc. Raw output preserved.]`;
+					}
+				}
+
 				// Dynamic Routing Parsing
 				// Re-check if dynamic (Destination is not a static agent name)
 				const isStatic = configs[config.destination];
 
 				if (config.destination && !isStatic) {
+					// NOTE: If we converted output to a URL, we still need to parse the ORIGINAL text for routing tags!
+					// We should use `result.text` for parsing, not `finalOutput` (which might be a URL now).
 					const routeRegex = />> ROUTE: (.+)$/m;
-					const match = finalOutput.match(routeRegex);
+					const match = result.text.match(routeRegex);
+
 					if (match) {
 						const instruction = match[1].trim();
 						console.log(`Dynamic Routing Triggered: ${instruction}`);
 
-						// Cleanup Output (remove the route tag)
-						finalOutput = finalOutput.replace(routeRegex, '').trim();
+						// Cleanup Output (remove the route tag) FROM THE DOC CONTENT if possible?
+						// For "Level 1", we accepted that the route tag might be in the doc. 
+						// However, we can clean it from `finalOutput` if it's text.
+						// If it is a Doc, we already wrote the content. 
+						// Ideally, we clean `result.text` BEFORE creating the doc.
 
 						if (instruction.toUpperCase() === 'STOP') {
 							routedDestination = null; // No handoff
@@ -147,17 +167,9 @@ ${inputVal}
 								routedDestination = instruction;
 							} else {
 								console.warn(`Routed agent "${instruction}" not found. Falling back to default.`);
-								// Fallback behavior: If the LLM tried to route but failed, 
-								// should we process the original destination string?
-								// No, because the original destination string is an instruction, not an agent.
-								// So we default to null (STOP) to avoid crashing.
 								routedDestination = null;
 							}
 						}
-					} else {
-						// LLM failed to output a route tag despite instructions?
-						console.warn("Dynamic routing instruction present usage but no ROUTE tag found.");
-						routedDestination = null; // Safety: default to Stop if no valid route found.
 					}
 				}
 

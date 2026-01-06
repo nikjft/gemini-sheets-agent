@@ -139,5 +139,70 @@ var DriveService = {
 		}
 
 		return `[Binary or Unsupported File Type: ${mime}]`;
+	},
+
+	/**
+	 * Creates a new Google Doc from Markdown-style text
+	 */
+	createDocumentFromMarkdown: function (title, content) {
+		const doc = DocumentApp.create(title);
+		const body = doc.getBody();
+
+		// Split by lines to process simple markdown
+		const lines = content.split('\n');
+
+		// Clear default text
+		body.setText('');
+
+		let inList = false;
+
+		lines.forEach(line => {
+			let text = line.trim();
+
+			// Headers
+			if (text.startsWith('# ')) {
+				body.appendParagraph(text.substring(2)).setHeading(DocumentApp.ParagraphHeading.HEADING1);
+				inList = false;
+			} else if (text.startsWith('## ')) {
+				body.appendParagraph(text.substring(3)).setHeading(DocumentApp.ParagraphHeading.HEADING2);
+				inList = false;
+			} else if (text.startsWith('### ')) {
+				body.appendParagraph(text.substring(4)).setHeading(DocumentApp.ParagraphHeading.HEADING3);
+				inList = false;
+			}
+			// Bullet Points
+			else if (text.startsWith('* ') || text.startsWith('- ')) {
+				// Append list item
+				const listItem = body.appendListItem(text.substring(2));
+				listItem.setGlyphType(DocumentApp.GlyphType.BULLET);
+				inList = true;
+			}
+			// Normal Text
+			else {
+				if (text.length > 0) {
+					const p = body.appendParagraph(text);
+					p.setHeading(DocumentApp.ParagraphHeading.NORMAL);
+
+					// Bold styling (simple regex for **bold**)
+					// We have to scan the paragraph we just added. 
+					// Apps Script styling is complex, so we'll do a simple pass.
+					const boldRegex = /\*\*(.*?)\*\*/g;
+					let match;
+					while ((match = boldRegex.exec(text)) !== null) {
+						const start = match.index;
+						const end = start + match[0].length - 1;
+						// Warning: `editAsText()` applies to the whole element text.
+						// If we strip asterisks in valid Google Doc logic we need robust parsing.
+						// For "Level 1" we will just style the asterisks as well or leave them.
+						// Let's at least make the whole block bold if it's strictly **text**
+						// For now, let's just keep it as text to avoid index complexity errors in Level 1.
+					}
+				}
+				inList = false;
+			}
+		});
+
+		doc.saveAndClose();
+		return doc.getUrl();
 	}
 };

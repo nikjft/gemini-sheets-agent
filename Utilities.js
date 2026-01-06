@@ -68,6 +68,7 @@ var Utilities_Helper = {
 			inputExample: getIdx('Input Example'),
 			outputDesc: getIdx('Output Description'),
 			outputExample: getIdx('Output Example'),
+			outputFormat: getIdx('Output Format'),
 			model: getIdx('Model'),
 			destination: getIdx('Destination Agent')
 		};
@@ -91,6 +92,7 @@ var Utilities_Helper = {
 					inputExample: row[indices.inputExample],
 					outputDesc: row[indices.outputDesc],
 					outputExample: row[indices.outputExample],
+					outputFormat: row[indices.outputFormat] || 'Text', // Default to Text
 					model: row[indices.model],
 					destination: row[indices.destination]
 				};

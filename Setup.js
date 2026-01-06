@@ -90,6 +90,7 @@ var Setup = {
 			'Input Example',
 			'Output Description',
 			'Output Example',
+			'Output Format', // New
 			'Model',
 			'Destination Agent'
 		];
@@ -126,6 +127,7 @@ var Setup = {
 				'Lorem ipsum...',
 				'A brief summary',
 				'It was a text about Lorem.',
+				'Text', // Output Format
 				'gemini-2.0-flash-exp',
 				''
 			];
@@ -149,6 +151,7 @@ var Setup = {
 		setValidation('Pass Input to Next', ['Yes', 'No']);
 		setValidation('Pass Agent Context to Next', ['Yes', 'No']);
 		setValidation('Pass Data Context to Next', ['Yes', 'No']);
+		setValidation('Output Format', ['Text', 'Document']); // New
 
 		// Model Validation
 		const models = [
