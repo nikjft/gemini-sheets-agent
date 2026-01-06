@@ -54,8 +54,9 @@ var LLMService = {
 		};
 
 		// Retry Logic with Exponential Backoff
-		const MAX_RETRIES = 3;
-		let delay = 1000; // Start with 1 second
+		// Retry Logic with Exponential Backoff
+		const MAX_RETRIES = 5; // Increased from 3 to 5 for large payloads
+		let delay = 1000;      // Default start 1s
 
 		for (let i = 0; i <= MAX_RETRIES; i++) {
 			try {
@@ -79,9 +80,15 @@ var LLMService = {
 				// Rate Limit (429) -> Retry
 				if (code === 429) {
 					if (i < MAX_RETRIES) {
-						console.warn(`Rate limit hit (429). Retrying in ${delay / 1000}s...`);
-						Utilities.sleep(delay);
-						delay *= 2; // Exponential backoff
+						// For 429s specifically, ensure we start with at least 10s to clear TPM window
+						const waitTime = Math.max(delay, 10000);
+						console.warn(`Rate limit hit (429). Retrying in ${waitTime / 1000}s...`);
+						Utilities.sleep(waitTime);
+
+						// Backoff logic
+						if (delay < 10000) delay = 20000; // Jump to 20s next if we just did 10s
+						else delay *= 2;
+
 						continue;
 					} else {
 						return { success: false, error: 'Rate limit exceeded after retries.' };

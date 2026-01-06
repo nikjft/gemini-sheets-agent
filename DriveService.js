@@ -204,5 +204,52 @@ var DriveService = {
 
 		doc.saveAndClose();
 		return doc.getUrl();
+	},
+
+	/**
+	 * Saves large content to a text file in a dedicated cache folder.
+	 * Returns the File URL.
+	 */
+	saveToCache: function (agentName, content) {
+		const FOLDER_NAME = "Gemini_Agents_Cache";
+		let folder;
+
+		// Find or Create Folder
+		const folders = DriveApp.getFoldersByName(FOLDER_NAME);
+		if (folders.hasNext()) {
+			folder = folders.next();
+		} else {
+			folder = DriveApp.createFolder(FOLDER_NAME);
+		}
+
+		// Create File name: AgentName_Timestamp.txt
+		const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+		const fileName = `${agentName}_CACHE_${timestamp}.txt`;
+
+		const file = folder.createFile(fileName, content, MimeType.PLAIN_TEXT);
+		return file.getUrl();
+	},
+
+	/**
+	 * Deletes cache files older than X days
+	 */
+	purgeCache: function (daysToKeep) {
+		const FOLDER_NAME = "Gemini_Agents_Cache";
+		const folders = DriveApp.getFoldersByName(FOLDER_NAME);
+		if (!folders.hasNext()) return 0;
+
+		const folder = folders.next();
+		const files = folder.getFiles();
+		const cutoff = new Date().getTime() - (daysToKeep * 24 * 60 * 60 * 1000);
+
+		let deletedCount = 0;
+		while (files.hasNext()) {
+			const file = files.next();
+			if (file.getDateCreated().getTime() < cutoff) {
+				file.setTrashed(true);
+				deletedCount++;
+			}
+		}
+		return deletedCount;
 	}
 };

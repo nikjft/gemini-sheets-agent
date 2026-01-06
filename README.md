@@ -117,6 +117,23 @@ You can insert data into your agents from external tools using a secure webhook.
     }
     ```
 
+#### 3. Large Payloads & Caching
+If you send a payload larger than **45,000 characters** (e.g. long meeting notes), the system automatically handles it:
+1.  The text is saved to a specific `Gemini_Agents_Cache` folder in your Google Drive.
+2.  The Google Drive Link is inserted into the Sheet instead of the raw text (avoiding the 50k cell limit).
+3.  The Agent automatically reads the full content from the file at runtime.
+
+**Maintenance**:
+*   To clean up old cache files, click **Agent Orchestrator** > **Configuration** > **Purge Cache**.
+*   Default is to delete files older than 7 days.
+
+### 4. Clipboard Input (Large Texts)
+If you have a large text (like a transcript) on your clipboard:
+1.  Go to the Agent tab you want to add data to.
+2.  Click **Agent Orchestrator** > **Add Input from Clipboard**.
+3.  Paste the text into the box and click **Submit**.
+    *   If the text is huge (>45k chars), it will automatically be cached to Drive.
+
 ## Advanced Features
 
 ### Dynamic Routing

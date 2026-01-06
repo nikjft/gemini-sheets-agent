@@ -9,12 +9,14 @@ function onOpen() {
   const configMenu = ui.createMenu('Configuration')
     .addItem('Configure Gemini API', 'menuConfigureAPI')
     .addItem('Get Webhook Config', 'menuWebhookConfig')
-    .addItem('Generate Webhook for Current Agent', 'menuGetAgentWebhook');
+    .addItem('Generate Webhook for Current Agent', 'menuGetAgentWebhook')
+    .addItem('Purge Cache', 'menuPurgeCache');
 
   ui.createMenu('Agent Orchestrator')
     .addItem('Run automated agents', 'menuRunAll')
     .addItem('Run current agent', 'menuRunCurrent')
     .addItem('Re-process selected row', 'menuProcessSelected')
+    .addItem('Add Input from Clipboard', 'menuClipboardInput') // New
     .addSeparator()
     .addItem('Set Up Agents', 'menuSetup')
     .addSubMenu(configMenu)
@@ -26,6 +28,62 @@ function onOpen() {
  */
 function menuSetup() {
   Setup.runSetup();
+}
+
+/**
+ * Menu Handler: Add Input from Clipboard
+ */
+function menuClipboardInput() {
+  const sheet = SpreadsheetApp.getActiveSheet();
+  const agentName = sheet.getName();
+  Setup.showClipboardInput(agentName);
+}
+
+/**
+ * Client-Side Handler: Process Clipboard Input
+ */
+function handleClipboardInput(agentName, text) {
+  try {
+    if (!text) throw new Error("Input is empty.");
+
+    // Validate Agent
+    if (!Orchestrator.isAgent(agentName)) throw new Error("Current sheet is not a valid Agent.");
+
+    let inputVal = text;
+
+    // Cache if Large (>45k)
+    if (text.length > 45000) {
+      inputVal = DriveService.saveToCache(agentName, text);
+    }
+
+    // Insert Row
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const sheet = ss.getSheetByName(agentName);
+    const headers = Utilities_Helper.getHeadersIndices(sheet);
+
+    if (!headers['Job ID'] || !headers['Input']) throw new Error("Sheet missing required headers.");
+
+    const lastCol = sheet.getLastColumn();
+    const newRowData = new Array(lastCol).fill('');
+    const jobId = Utilities_Helper.generateGUID();
+
+    // Helper to map 1-based header index to 0-based array index
+    const setCol = (name, val) => {
+      if (headers[name]) newRowData[headers[name] - 1] = val;
+    };
+
+    setCol('Job ID', jobId);
+    setCol('Input', inputVal);
+    setCol('Process State', ''); // Ready for processing
+
+    sheet.appendRow(newRowData);
+    SpreadsheetApp.flush();
+
+    return { success: true, message: "Row added successfully!" + (text.length > 45000 ? " (Cached to Drive)" : "") };
+
+  } catch (e) {
+    return { success: false, message: e.toString() };
+  }
 }
 
 /**
@@ -60,6 +118,21 @@ function menuWebhookConfig() {
 }
 
 /**
+ * Menu Handler: Purge Cache
+ */
+function menuPurgeCache() {
+  const ui = SpreadsheetApp.getUi();
+  const result = ui.prompt('Purge Cache', 'Delete cache files older than X days (default 7):', ui.ButtonSet.OK_CANCEL);
+
+  if (result.getSelectedButton() == ui.Button.OK) {
+    const txt = result.getResponseText();
+    const days = parseInt(txt) || 7;
+    const count = DriveService.purgeCache(days);
+    ui.alert(`Deleted ${count} file(s) from Gemini_Agents_Cache.`);
+  }
+}
+
+/**
  * Web App Entry Point: POST Requests
  */
 function doPost(e) {
@@ -75,7 +148,7 @@ function doPost(e) {
     const json = JSON.parse(e.postData.contents);
     const token = json.token;
     const agentName = json.agentName;
-    const input = json.input;
+    let input = json.input;
 
     // 2. Security Check & Validation
     const savedSecret = PropertiesService.getScriptProperties().getProperty('WEBHOOK_SECRET');
@@ -85,6 +158,17 @@ function doPost(e) {
 
     if (!agentName) throw new Error('Missing "agentName".');
     if (!input) throw new Error('Missing "input".');
+
+    // Handle Large Payloads (>45k chars) to avoid Cell Limit (50k)
+    if (input.length > 45000) {
+      try {
+        const cacheUrl = DriveService.saveToCache(agentName, input);
+        input = cacheUrl; // Replace raw content with Drive URL
+      } catch (e) {
+        console.error(`Failed to cache large payload: ${e.toString()}`);
+        throw new Error('Payload too large and caching failed.');
+      }
+    }
 
     // 3. Insert into Sheet
     const ss = SpreadsheetApp.getActiveSpreadsheet();

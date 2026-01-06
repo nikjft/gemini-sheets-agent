@@ -98,8 +98,11 @@ var AgentRunner = {
 			}
 
 			// Check if Input exists
-			const inputVal = row[headers['Input'] - 1];
+			let inputVal = row[headers['Input'] - 1];
 			if (!inputVal) continue; // Skip empty rows
+
+			// Process Input for Drive Context (e.g. if Input is a Doc URL)
+			inputVal = DriveService.processContext(inputVal);
 
 			// Update status to Processing
 			sheet.getRange(rowIndex, headers['Process State']).setValue('Processing');

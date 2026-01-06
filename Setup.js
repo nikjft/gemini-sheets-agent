@@ -375,5 +375,80 @@ var Setup = {
     `);
 
 		ui.showModalDialog(template.evaluate().setWidth(500).setHeight(450), `Webhook: ${agentName}`);
+	},
+
+	/**
+	 * Shows Clipboard Input Modal
+	 */
+	showClipboardInput: function (agentName) {
+		const ui = SpreadsheetApp.getUi();
+
+		// 1. Validate (Light check)
+		if (!agentName) {
+			ui.alert('Please select an Agent tab first.');
+			return;
+		}
+
+		const template = HtmlService.createTemplate(`
+      <style>
+        body { font-family: sans-serif; padding: 15px; display: flex; flex-direction: column; height: 90%; }
+        label { font-weight: bold; margin-bottom: 5px; display: block; }
+        textarea { flex: 1; width: 100%; min-height: 200px; padding: 10px; margin-bottom: 10px; box-sizing: border-box; border: 1px solid #ccc; font-family: monospace; }
+        .buttons { text-align: right; }
+        button { padding: 10px 20px; cursor: pointer; background: #eee; border: 1px solid #ccc; }
+        button.primary { background: #1a73e8; color: white; border: none; }
+        .info { font-size: 0.9em; color: #666; margin-bottom: 10px; }
+        #status { margin-top: 10px; font-weight: bold; color: #1a73e8; }
+        .error { color: #d93025; }
+        .success { color: #188038; }
+      </style>
+      <script>
+        function submitData() {
+           var text = document.getElementById('inputData').value;
+           if (!text.trim()) {
+             alert('Input cannot be empty.');
+             return;
+           }
+           
+           document.getElementById('status').className = '';
+           document.getElementById('status').innerText = 'Processing... (This may take a moment for large files)';
+           document.getElementById('btnSubmit').disabled = true;
+
+           google.script.run
+             .withSuccessHandler(function(res) {
+                var st = document.getElementById('status');
+                if (res.success) {
+                   st.className = 'success';
+                   st.innerText = res.message;
+                   setTimeout(function() { google.script.host.close(); }, 2000);
+                } else {
+                   st.className = 'error';
+                   st.innerText = 'Error: ' + res.message;
+                   document.getElementById('btnSubmit').disabled = false;
+                }
+             })
+             .withFailureHandler(function(err) {
+                 var st = document.getElementById('status');
+                 st.className = 'error';
+                 st.innerText = 'System Error: ' + err;
+                 document.getElementById('btnSubmit').disabled = false;
+             })
+             .handleClipboardInput('${agentName}', text);
+        }
+      </script>
+      
+      <h3>Add Input: ${agentName}</h3>
+      <div class="info">Paste your text here. Large payloads (>45k chars) will be auto-cached to Drive.</div>
+      
+      <textarea id="inputData" placeholder="Paste meeting transcript or data here..."></textarea>
+      
+      <div class="buttons">
+         <button onclick="google.script.host.close()">Cancel</button>
+         <button id="btnSubmit" class="primary" onclick="submitData()">Submit Input</button>
+      </div>
+      <div id="status"></div>
+    `);
+
+		ui.showModalDialog(template.evaluate().setWidth(600).setHeight(500), `Add Input: ${agentName}`);
 	}
 };
