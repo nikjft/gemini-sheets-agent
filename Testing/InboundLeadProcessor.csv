@@ -1,0 +1,4 @@
+Job ID,Input,Output,Context,Process State,Quality,Error
+job-001,"{ ""Company"": ""Acme Corp"", ""Contact"": ""Wile E. Coyote"", ""Budget"": ""$50,000"", ""Needs"": ""Full cloud migration and rocket supplies"" }",,,,,,
+job-002,"{ ""Company"": ""Mom & Pop Shop"", ""Contact"": ""Pop"", ""Budget"": ""$500"", ""Needs"": ""Help fixing printer"" }",,,,,,
+job-003,"{ ""Company"": ""Stark Industries"", ""Contact"": ""Tony"", ""Budget"": ""Unlimited"", ""Needs"": ""AI Assistant Architecture"" }",,,,,,
