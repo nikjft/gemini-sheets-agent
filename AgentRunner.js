@@ -202,37 +202,76 @@ ${config.outputDesc || 'N/A'}
 		}
 
 		const headers = Utilities_Helper.getHeadersIndices(destSheet);
-		if (!headers['Job ID'] || !headers['Input']) return;
-
-		// Calculate Context to Pass
-		let nextContext = '';
-		const passMode = config.passContext.toLowerCase();
-
-		if (passMode === 'agent') {
-			nextContext = config.contextInstructions || '';
-		} else if (passMode === 'data') {
-			nextContext = currentContext;
-		} else if (passMode === 'both') {
-			nextContext = JSON.stringify({
-				prior_agent_context: config.contextInstructions || '',
-				prior_data_context: currentContext
-			}, null, 2);
+		if (!headers['Job ID'] || !headers['Input']) {
+			console.warn(`Destination sheet ${destName} missing required headers.`);
+			return;
 		}
 
-		// Append Row
+		// 1. Calculate Context to Pass (Granular Control)
+		const contextObj = {};
+		let hasContext = false;
+
+		// Pass Input
+		if (config.passInput) {
+			contextObj.prior_input = currentInput;
+			hasContext = true;
+		}
+		// Pass Agent Instructions (Static)
+		if (config.passAgentContext) {
+			contextObj.prior_agent_instructions = config.contextInstructions || '';
+			hasContext = true;
+		}
+		// Pass Data Context (Dynamic)
+		if (config.passDataContext) {
+			contextObj.prior_data_context = currentContext;
+			hasContext = true;
+		}
+
+		const nextContext = hasContext ? JSON.stringify(contextObj, null, 2) : '';
+
+		// 2. Prepare Row Data
 		// Mapping: JobID -> JobID, Output -> Input, Context -> Context
-		// We create an array matching the sheet columns length, filling specific indices
-
 		const lastCol = destSheet.getLastColumn();
-		const newRow = new Array(lastCol).fill('');
 
-		newRow[headers['Job ID'] - 1] = jobId;
-		newRow[headers['Input'] - 1] = currentOutput; // The output of current is input of next
-		if (headers['Context']) {
-			newRow[headers['Context'] - 1] = nextContext;
+		// New Row Array (1-based index logic)
+		const newRowData = new Array(lastCol).fill('');
+
+		// Helper to set value at correct index (0-based array)
+		// headers map returns 1-based index
+		const setVal = (headerName, val) => {
+			if (headers[headerName]) {
+				newRowData[headers[headerName] - 1] = val;
+			}
+		};
+
+		setVal('Job ID', jobId);
+		setVal('Input', currentOutput); // The output of current is input of next
+		setVal('Context', nextContext);
+		// Ensure Process State is empty so it gets picked up
+		setVal('Process State', '');
+
+		// 3. Idempotency Check: Overwrite if Job ID exists
+		const destData = destSheet.getDataRange().getValues();
+		const jobIdColIdx = headers['Job ID'] - 1;
+
+		let foundRowIndex = -1;
+
+		// Start from row 2 (index 1)
+		for (let i = 1; i < destData.length; i++) {
+			if (destData[i][jobIdColIdx] == jobId) {
+				foundRowIndex = i + 1; // 1-based row index
+				break;
+			}
 		}
 
-		// Add row
-		destSheet.appendRow(newRow);
+		if (foundRowIndex > -1) {
+			// Overwrite existing row
+			destSheet.getRange(foundRowIndex, 1, 1, lastCol).setValues([newRowData]);
+			console.log(`Updated existing row for Job ${jobId} in ${destName}`);
+		} else {
+			// Append new row
+			destSheet.appendRow(newRowData);
+			console.log(`Appended new row for Job ${jobId} into ${destName}`);
+		}
 	}
 };

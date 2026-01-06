@@ -60,8 +60,10 @@ var Utilities_Helper = {
 			name: getIdx('Agent Name'),
 			autoRun: getIdx('Auto-Run'),
 			prompt: getIdx('Prompt Core'),
-			contextField: getIdx('Context Field'), // Additional Instructions
-			passContext: getIdx('Pass Context'),
+			contextInstructions: getIdx('Context Field'),
+			passInput: getIdx('Pass Input to Next'),
+			passAgentContext: getIdx('Pass Agent Context to Next'),
+			passDataContext: getIdx('Pass Data Context to Next'),
 			inputDesc: getIdx('Input Description'),
 			inputExample: getIdx('Input Example'),
 			outputDesc: getIdx('Output Description'),
@@ -74,12 +76,17 @@ var Utilities_Helper = {
 			const row = data[i];
 			const name = row[indices.name];
 			if (name) {
+				// Safe access helper
+				const getVal = (idx) => (idx >= 0 && row[idx] !== undefined) ? row[idx].toString() : '';
+
 				configs[name] = {
 					name: name,
-					autoRun: (row[indices.autoRun] || '').toString().toLowerCase() === 'yes',
+					autoRun: getVal(indices.autoRun).toLowerCase() === 'yes',
 					prompt: row[indices.prompt],
-					contextInstructions: row[indices.contextField],
-					passContext: (row[indices.passContext] || '').toLowerCase(),
+					contextInstructions: row[indices.contextInstructions],
+					passInput: getVal(indices.passInput).toLowerCase() === 'yes',
+					passAgentContext: getVal(indices.passAgentContext).toLowerCase() === 'yes',
+					passDataContext: getVal(indices.passDataContext).toLowerCase() === 'yes',
 					inputDesc: row[indices.inputDesc],
 					inputExample: row[indices.inputExample],
 					outputDesc: row[indices.outputDesc],

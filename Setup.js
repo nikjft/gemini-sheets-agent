@@ -77,24 +77,39 @@ var Setup = {
 		const ss = SpreadsheetApp.getActiveSpreadsheet();
 		let sheet = ss.getSheetByName('Agents');
 
-		if (!sheet) {
-			sheet = ss.insertSheet('Agents', 0); // Create as first tab
+		// Desired Headers
+		const headers = [
+			'Agent Name',
+			'Auto-Run',
+			'Prompt Core',
+			'Context Field',
+			'Pass Input to Next',
+			'Pass Agent Context to Next',
+			'Pass Data Context to Next',
+			'Input Description',
+			'Input Example',
+			'Output Description',
+			'Output Example',
+			'Model',
+			'Destination Agent'
+		];
 
-			// Headers
-			const headers = [
-				'Agent Name',
-				'Auto-Run',
-				'Prompt Core',
-				'Context Field',
-				'Pass Context',
-				'Input Description',
-				'Input Example',
-				'Output Description',
-				'Output Example',
-				'Model',
-				'Destination Agent'
-			];
-
+		// Logic to check and append missing headers (Auto-Repair)
+		if (sheet) {
+			const lastCol = sheet.getLastColumn();
+			if (lastCol > 0) {
+				const currentHeaders = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
+				headers.forEach(h => {
+					if (!currentHeaders.includes(h)) {
+						sheet.getRange(1, lastCol + 1).setValue(h).setFontWeight('bold');
+						console.log(`Added missing header: ${h}`);
+						// Note: This appends to end. If user wants specific order, they should rearrange manually.
+					}
+				});
+			}
+		} else {
+			// New Sheet Creation
+			sheet = ss.insertSheet('Agents', 0);
 			sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
 			sheet.getRange(1, 1, 1, headers.length).setFontWeight('bold');
 			sheet.setFrozenRows(1);
@@ -105,7 +120,9 @@ var Setup = {
 				'No',
 				'Summarize this text.',
 				'Keep it under 50 words.',
-				'Both',
+				'Yes', // Pass Input
+				'No',  // Pass Agent Context
+				'No',  // Pass Data Context
 				'A paragraph of text',
 				'Lorem ipsum...',
 				'A brief summary',
@@ -114,22 +131,27 @@ var Setup = {
 				''
 			];
 			sheet.appendRow(exampleRow);
-
 			console.log('Created Agents tab.');
-		} else {
-			console.log('Agents tab already exists. Skipping creation to preserve data.');
 		}
 
-		// Apply Data Validation (Update everytime to ensure latest options)
-		// Column 2: Auto-Run (Yes/No)
-		const runRule = SpreadsheetApp.newDataValidation().requireValueInList(['Yes', 'No']).setAllowInvalid(true).build();
-		sheet.getRange("B2:B1000").setDataValidation(runRule);
+		// Apply Data Validation (Dynamic locations)
+		const headersIndices = Utilities_Helper.getHeadersIndices(sheet);
 
-		// Column 5: Pass Context (Agent, Data, Both)
-		const contextRule = SpreadsheetApp.newDataValidation().requireValueInList(['Agent', 'Data', 'Both']).setAllowInvalid(true).build();
-		sheet.getRange("E2:E1000").setDataValidation(contextRule);
+		const setValidation = (colName, list) => {
+			const colIdx = headersIndices[colName];
+			if (colIdx) {
+				const rule = SpreadsheetApp.newDataValidation().requireValueInList(list).setAllowInvalid(true).build();
+				// Apply to rows 2-1000
+				sheet.getRange(2, colIdx, 999, 1).setDataValidation(rule);
+			}
+		};
 
-		// Column 10: Model
+		setValidation('Auto-Run', ['Yes', 'No']);
+		setValidation('Pass Input to Next', ['Yes', 'No']);
+		setValidation('Pass Agent Context to Next', ['Yes', 'No']);
+		setValidation('Pass Data Context to Next', ['Yes', 'No']);
+
+		// Model Validation
 		const models = [
 			'gemini-2.0-flash-exp',
 			'gemini-1.5-flash',
@@ -137,9 +159,7 @@ var Setup = {
 			'gemini-1.5-pro',
 			'gemini-1.5-pro-002'
 		];
-		const modelRule = SpreadsheetApp.newDataValidation().requireValueInList(models).setAllowInvalid(true).build();
-		sheet.getRange("J2:J1000").setDataValidation(modelRule);
-
+		setValidation('Model', models);
 	},
 
 	/**
@@ -174,7 +194,18 @@ var Setup = {
 				SpreadsheetApp.flush(); // Force write
 				console.log(`Created data tab for agent: ${agentName}`);
 			} else {
-				console.log(`Data tab for agent "${agentName}" already exists. Skipping creation.`);
+				// Auto-Repair Data Headers
+				const lastCol = sheet.getLastColumn();
+				if (lastCol > 0) {
+					const currentHeaders = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
+					dataHeaders.forEach(h => {
+						if (!currentHeaders.includes(h)) {
+							sheet.getRange(1, lastCol + 1).setValue(h).setFontWeight('bold');
+							console.log(`Added missing header to ${agentName}: ${h}`);
+						}
+					});
+				}
+				console.log(`Data tab for agent "${agentName}" checked/updated.`);
 			}
 		}
 	}
