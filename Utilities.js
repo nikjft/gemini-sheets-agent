@@ -24,9 +24,16 @@ var Utilities_Helper = {
 		if (lastCol === 0) return map;
 
 		const headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
+		const seen = new Set();
+
 		headers.forEach((header, index) => {
 			if (header) {
-				map[header.trim()] = index + 1;
+				const cleanName = header.trim();
+				if (seen.has(cleanName)) {
+					console.warn(`Duplicate header found in sheet "${sheet.getName()}": "${cleanName}". Using the last occurrence.`);
+				}
+				seen.add(cleanName);
+				map[cleanName] = index + 1;
 			}
 		});
 		return map;

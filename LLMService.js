@@ -13,15 +13,17 @@ var LLMService = {
 			throw new Error('GEMINI_API_KEY script property is not set.');
 		}
 
-		// Map friendly names to API model names if necessary
-		// E.g. "2.5 flash" -> "gemini-1.5-flash"
-		// For now assuming user puts valid model string or we map simple ones
+		// Model Mapping Logic:
+		// 1. If it starts with "gemini-", assume it's a valid API name and use it directly.
+		// 2. Otherwise, map common friendly names.
 		let apiModel = modelId.trim();
-		if (apiModel.includes('flash')) apiModel = 'gemini-1.5-flash';
-		else if (apiModel.includes('pro')) apiModel = 'gemini-1.5-pro';
+		const lowerModel = apiModel.toLowerCase();
 
-		// Default fallback
-		if (!apiModel) apiModel = 'gemini-1.5-flash';
+		if (!lowerModel.startsWith('gemini-')) {
+			if (lowerModel.includes('flash')) apiModel = 'gemini-1.5-flash';
+			else if (lowerModel.includes('pro')) apiModel = 'gemini-1.5-pro';
+			else apiModel = 'gemini-1.5-flash'; // Fallback
+		}
 
 		const url = `https://generativelanguage.googleapis.com/v1beta/models/${apiModel}:generateContent?key=${apiKey}`;
 
@@ -45,27 +47,54 @@ var LLMService = {
 			muteHttpExceptions: true
 		};
 
-		try {
-			const response = UrlFetchApp.fetch(url, options);
-			const code = response.getResponseCode();
-			const text = response.getContentText();
+		// Retry Logic with Exponential Backoff
+		const MAX_RETRIES = 3;
+		let delay = 1000; // Start with 1 second
 
-			if (code !== 200) {
+		for (let i = 0; i <= MAX_RETRIES; i++) {
+			try {
+				const response = UrlFetchApp.fetch(url, options);
+				const code = response.getResponseCode();
+				const text = response.getContentText();
+
+				// Success
+				if (code === 200) {
+					const json = JSON.parse(text);
+					if (json.candidates && json.candidates.length > 0 && json.candidates[0].content) {
+						return {
+							success: true,
+							text: json.candidates[0].content.parts[0].text
+						};
+					} else {
+						return { success: false, error: 'No content in response' };
+					}
+				}
+
+				// Rate Limit (429) -> Retry
+				if (code === 429) {
+					if (i < MAX_RETRIES) {
+						console.warn(`Rate limit hit (429). Retrying in ${delay / 1000}s...`);
+						Utilities.sleep(delay);
+						delay *= 2; // Exponential backoff
+						continue;
+					} else {
+						return { success: false, error: 'Rate limit exceeded after retries.' };
+					}
+				}
+
+				// Other Errors -> Abort
 				return { success: false, error: `API Error ${code}: ${text}` };
-			}
 
-			const json = JSON.parse(text);
-			if (json.candidates && json.candidates.length > 0 && json.candidates[0].content) {
-				return {
-					success: true,
-					text: json.candidates[0].content.parts[0].text
-				};
-			} else {
-				return { success: false, error: 'No content in response' };
+			} catch (e) {
+				// Network errors needing retry?
+				if (i < MAX_RETRIES) {
+					console.warn(`Fetch error: ${e}. Retrying...`);
+					Utilities.sleep(delay);
+					delay *= 2;
+					continue;
+				}
+				return { success: false, error: e.toString() };
 			}
-
-		} catch (e) {
-			return { success: false, error: e.toString() };
 		}
 	}
 };
