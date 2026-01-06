@@ -103,7 +103,6 @@ var Setup = {
 					if (!currentHeaders.includes(h)) {
 						sheet.getRange(1, lastCol + 1).setValue(h).setFontWeight('bold');
 						console.log(`Added missing header: ${h}`);
-						// Note: This appends to end. If user wants specific order, they should rearrange manually.
 					}
 				});
 			}

@@ -122,13 +122,54 @@ ${inputVal}
 			const result = LLMService.callGemini(config.model, systemPrompt, userContent);
 
 			if (result.success) {
+				let finalOutput = result.text;
+				let routedDestination = config.destination; // Default. If dynamic, this string is ignored/overwritten below.
+
+				// Dynamic Routing Parsing
+				// Re-check if dynamic (Destination is not a static agent name)
+				const isStatic = configs[config.destination];
+
+				if (config.destination && !isStatic) {
+					const routeRegex = />> ROUTE: (.+)$/m;
+					const match = finalOutput.match(routeRegex);
+					if (match) {
+						const instruction = match[1].trim();
+						console.log(`Dynamic Routing Triggered: ${instruction}`);
+
+						// Cleanup Output (remove the route tag)
+						finalOutput = finalOutput.replace(routeRegex, '').trim();
+
+						if (instruction.toUpperCase() === 'STOP') {
+							routedDestination = null; // No handoff
+						} else {
+							// Check if targeted agent exists
+							if (configs[instruction]) {
+								routedDestination = instruction;
+							} else {
+								console.warn(`Routed agent "${instruction}" not found. Falling back to default.`);
+								// Fallback behavior: If the LLM tried to route but failed, 
+								// should we process the original destination string?
+								// No, because the original destination string is an instruction, not an agent.
+								// So we default to null (STOP) to avoid crashing.
+								routedDestination = null;
+							}
+						}
+					} else {
+						// LLM failed to output a route tag despite instructions?
+						console.warn("Dynamic routing instruction present usage but no ROUTE tag found.");
+						routedDestination = null; // Safety: default to Stop if no valid route found.
+					}
+				}
+
 				// Write Output
-				sheet.getRange(rowIndex, headers['Output']).setValue(result.text);
+				sheet.getRange(rowIndex, headers['Output']).setValue(finalOutput);
 				sheet.getRange(rowIndex, headers['Process State']).setValue('Completed');
 
 				// Handoff to Next Agent
-				if (config.destination) {
-					this.handoffToNextAgent(ss, config, jobId, inputVal, rowContext, result.text);
+				if (routedDestination) {
+					// Need to merge config with new destination temporarily
+					const routingConfig = { ...config, destination: routedDestination };
+					this.handoffToNextAgent(ss, routingConfig, jobId, inputVal, rowContext, finalOutput);
 				}
 
 			} else {
@@ -157,32 +198,55 @@ Your Goal: ${config.prompt}
 
 INSTRUCTIONS:
 ${agentContext}
+`;
 
+		// Dynamic Routing Logic
+		// We check if the destination is a static Agent Name or a set of Instructions
+		const allConfigs = Utilities_Helper.getAgentsConfiguration();
+		const isStaticDestination = allConfigs[config.destination];
+
+		if (config.destination && !isStaticDestination) {
+			// It's a dynamic instruction (e.g. "Route to X if Y...")
+			const agentNames = Object.keys(allConfigs).join(', ');
+
+			prompt += `
+DETERMINE NEXT STEP:
+${config.destination}
+
+You have control over the process flow. Based on the rule above, append ONE of the following tags to the very end of your response:
+1. ">> ROUTE: STOP" (If the process should end)
+2. ">> ROUTE: [Agent Name]" (To pass to a specific agent)
+
+Available Agents: ${agentNames}
+`;
+		}
+
+		prompt += `
 INPUT DESCRIPTION:
 ${config.inputDesc || 'N/A'}
 
 OUTPUT DESCRIPTION:
 ${config.outputDesc || 'N/A'}
-    `;
+		`;
 
 		if (config.inputExample) {
-			prompt += `\nGENERIC INPUT EXAMPLE:\n${config.inputExample}\n`;
+			prompt += `\nGENERIC INPUT EXAMPLE: \n${config.inputExample} \n`;
 		}
 		if (config.outputExample) {
-			prompt += `\nGENERIC OUTPUT EXAMPLE:\n${config.outputExample}\n`;
+			prompt += `\nGENERIC OUTPUT EXAMPLE: \n${config.outputExample} \n`;
 		}
 
 		if (goodExamples.length > 0) {
-			prompt += `\n\n### POSITIVE EXAMPLES (Emulate these style/logic):\n`;
+			prompt += `\n\n### POSITIVE EXAMPLES(Emulate these style / logic): \n`;
 			goodExamples.forEach((ex, idx) => {
-				prompt += `Example ${idx + 1}:\nInput: ${ex.input}\nOutput: ${ex.output}\n---\n`;
+				prompt += `Example ${idx + 1}: \nInput: ${ex.input} \nOutput: ${ex.output} \n-- -\n`;
 			});
 		}
 
 		if (badExamples.length > 0) {
-			prompt += `\n\n### NEGATIVE EXAMPLES (Avoid these mistakes):\n`;
+			prompt += `\n\n### NEGATIVE EXAMPLES(Avoid these mistakes): \n`;
 			badExamples.forEach((ex, idx) => {
-				prompt += `Example ${idx + 1}:\nInput: ${ex.input}\nOutput: ${ex.output}\n---\n`;
+				prompt += `Example ${idx + 1}: \nInput: ${ex.input} \nOutput: ${ex.output} \n-- -\n`;
 			});
 		}
 
@@ -267,11 +331,11 @@ ${config.outputDesc || 'N/A'}
 		if (foundRowIndex > -1) {
 			// Overwrite existing row
 			destSheet.getRange(foundRowIndex, 1, 1, lastCol).setValues([newRowData]);
-			console.log(`Updated existing row for Job ${jobId} in ${destName}`);
+			console.log(`Updated existing row for Job ${jobId} in ${destName} `);
 		} else {
 			// Append new row
 			destSheet.appendRow(newRowData);
-			console.log(`Appended new row for Job ${jobId} into ${destName}`);
+			console.log(`Appended new row for Job ${jobId} into ${destName} `);
 		}
 	}
 };
