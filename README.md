@@ -40,6 +40,10 @@ This project allows you to orchestrate multi-agent workflows directly within Goo
     *   `AgentRunner.gs` (copy from `AgentRunner.js`)
     *   `LLMService.gs` (copy from `LLMService.js`)
     *   `Utilities.gs` (copy from `Utilities.js`)
+4.  **Important**: To support PDF reading, you must enable the **Drive API** service:
+    *   On the left sidebar, click `+` next to **Services**.
+    *   Select **Drive API**.
+    *   Click **Add**.
 
 ### 3. Configure API Key
 
