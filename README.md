@@ -188,6 +188,55 @@ Structure:
 
 **Result:** The `output` field in the webhook payload will contain that JSON string, which your downstream tool can parse.
 
+### 10. Prompt Construction & Engineering
+The final prompt sent to the LLM is a combination of your configuration, training data, and the specific row. 
+
+#### Structure of the LLM Request:
+The system builds the request in two parts:
+
+**Part A: The System Prompt (Instructions & Persona)**
+1.  **Identity**: `You are an AI agent named "[Agent Name]". Your Goal: [Goal]`
+2.  **Instructions**: Content from the `Context/Instructions` column of the Agent Config.
+3.  **Routing**: If dynamic routing is enabled, adds rules for `>> ROUTE: [Agent Name]`.
+4.  **Formatting**: `Input Description` and `Output Description`.
+5.  **Examples**: 
+    - **Generic**: User-provided `Input Example` / `Output Example`.
+    - **Few-Shot**: Up to 5 success rows from the agent's sheet (filtered for length/URLs).
+    - **Negative**: Up to 5 "Error" rows to show the model what to avoid.
+
+**Part B: The User Message (Data Row)**
+1.  **Context**: The `Context` column from the data row.
+2.  **Input Data**: The `Input` column data.
+
+#### Example Concatenation:
+```text
+You are an AI agent named "Lead Qualifier". 
+Your Goal: Categorize the lead and extract key info.
+
+INSTRUCTIONS:
+Refer to the Sales Territory doc: [Expanded Content]
+
+OUTPUT DESCRIPTION:
+Return JSON with name, company, and category.
+
+### POSITIVE EXAMPLES:
+Example 1:
+Input: John from Tesla
+Output: {"name": "John", "company": "Tesla", "category": "Hot"}
+
+---
+
+CONTEXT:
+Lead source: Website
+
+INPUT DATA:
+Jane Doe from SpaceX, interested in rockets.
+```
+
+> [!TIP]
+> Use the **Context** column for metadata (Source, Date, User Profile) and the **Input** column for the primary text to be processed. This helps the LLM distinguish between "Operational Context" and "Objective Data."
+
+
 ## Advanced Features
 
 ### 1. Safe Handoffs (Auto-Caching)
@@ -224,7 +273,7 @@ The system supports:
 *   **PDF Errors**: If you see an error about Drive API, ensure you enabled the "Drive API" in the Services menu of the script editor.
 *   **Timeouts**: Maximum execution time is ~6 minutes. The script picks up where it left off on the next run.
 
-### 10. Budget & Cost Management
+### 11. Budget & Cost Management
 Prevent accidental overspending with built-in budgeting tools.
 1.  **Budget Config Sheet**: Run **Setup Agents**. A new tab `Budget Config` will appear.
     *   **Daily Budget**: Set a hard daily limit (e.g. $0.10).
