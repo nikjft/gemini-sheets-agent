@@ -23,8 +23,6 @@ var BudgetManager = {
 				['Per-Run Budget ($)', 0.01, ''],
 				['', '', ''],
 				['Model Pricing', '$/1M Input', '$/1M Output'],
-				['gemini-2.0-flash-lite', 0.075, 0.30],
-				['gemini-2.0-flash', 0.10, 0.40],
 				['gemini-2.5-flash-lite', 0.10, 0.40],
 				['gemini-2.5-flash', 0.30, 2.50],
 				['gemini-3-flash-preview', 0.50, 3.00],

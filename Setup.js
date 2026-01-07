@@ -227,7 +227,7 @@ var Setup = {
 				'Text', // Output Format
 				500,    // Max Tokens
 				'No',   // Use Training Data
-				'gemini-2.0-flash-exp',
+				'gemini-2.5-flash',
 				''
 			];
 			sheet.appendRow(exampleRow);
@@ -256,8 +256,7 @@ var Setup = {
 
 		// Model Validation
 		const models = [
-			'gemini-2.0-flash-lite',
-			'gemini-2.0-flash',
+			'gemini-2.5-flash-lite',
 			'gemini-2.5-flash',
 			'gemini-3-flash-preview',
 			'gemini-2.5-pro', // Keeping previous default as fallback option
