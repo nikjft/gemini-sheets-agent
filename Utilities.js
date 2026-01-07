@@ -116,6 +116,13 @@ var Utilities_Helper = {
 		if (!html) return "";
 		let text = html;
 
+		// 0. Aggressive Cleaning (Scripts, Styles, SVGs, Comments)
+		// Note: [\s\S]*? is used to match across newlines non-greedily
+		text = text.replace(/<script\b[^>]*>([\s\S]*?)<\/script>/gmi, "");
+		text = text.replace(/<style\b[^>]*>([\s\S]*?)<\/style>/gmi, "");
+		text = text.replace(/<svg\b[^>]*>([\s\S]*?)<\/svg>/gmi, "");
+		text = text.replace(/<!--([\s\S]*?)-->/gmi, "");
+
 		// 1. Block Elements
 		text = text.replace(/<br\s*\/?>/gi, '\n');
 		text = text.replace(/<\/div>/gi, '\n');
