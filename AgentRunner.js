@@ -14,7 +14,14 @@ var AgentRunner = {
 			return false;
 		}
 
+
 		// Runtime API Key Check
+		if (targetRowIndices && targetRowIndices.length > 0) {
+			console.log(`AgentRunner: Strict Mode enabled for rows: ${JSON.stringify(targetRowIndices)}`);
+		} else {
+			console.log(`AgentRunner: Processing ALL pending rows.`);
+		}
+
 		const apiKey = PropertiesService.getScriptProperties().getProperty('GEMINI_API_KEY');
 		if (!apiKey) {
 			const msg = `Gemini API Key is missing. Please select "Agent Orchestrator > Configure Gemini API" from the menu.`;

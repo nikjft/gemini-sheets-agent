@@ -19,8 +19,8 @@ var BudgetManager = {
 			const defaults = [
 				['General Settings', 'Value', ''],
 				['Daily Budget ($)', 0.10, ''],
-				['Monthly Budget ($)', 0.10, ''],
-				['Per-Run Budget ($)', 0.50, ''],
+				['Monthly Budget ($)', 0.25, ''],
+				['Per-Run Budget ($)', 0.01, ''],
 				['', '', ''],
 				['Model Pricing', '$/1M Input', '$/1M Output'],
 				['gemini-2.0-flash-lite', 0.075, 0.30],

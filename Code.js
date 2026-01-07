@@ -355,6 +355,7 @@ function menuProcessSelected() {
   // Note: This runs the WHOLE agent scan again, picking up these rows.
   // Add 5 minute timeout safety
   if (targetIndices.length > 0) {
+    SpreadsheetApp.getActiveSpreadsheet().toast(`Processing ${targetIndices.length} specific row(s)...`, 'Starting');
     AgentRunner.runAgent(agentName, Date.now(), 1000 * 60 * 5, targetIndices);
   } else {
     SpreadsheetApp.getActiveSpreadsheet().toast('No valid rows selected.', 'Warning');
