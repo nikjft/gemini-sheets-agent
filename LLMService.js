@@ -7,7 +7,7 @@ var LLMService = {
 	/**
 	 * Main call function
 	 */
-	callGemini: function (modelId, systemPrompt, userMessage, temperature) {
+	callGemini: function (modelId, systemPrompt, userMessage, temperature, maxOutputTokens) {
 		const apiKey = PropertiesService.getScriptProperties().getProperty('GEMINI_API_KEY');
 		if (!apiKey) {
 			throw new Error('GEMINI_API_KEY script property is not set.');
@@ -42,7 +42,8 @@ var LLMService = {
 				parts: [{ text: userMessage }]
 			}],
 			generationConfig: {
-				temperature: temperature || 0.7
+				temperature: temperature || 0.7,
+				maxOutputTokens: maxOutputTokens || 500 // Default 500 if undefined
 			}
 		};
 

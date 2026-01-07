@@ -73,6 +73,8 @@ In the `Agents` tab, configure your agents:
 *   **Output Format**:
     *   **Text**: Default. Logic output is written to the cell.
     *   **Document**: Logic output is written to a **new Google Doc**, and the **URL** is written to the cell.
+*   **Max Output Tokens**: **NEW**: Limit the response length to save costs (Default: 500).
+*   **Use Training Data**: **NEW**: `Yes` to learn from "Good" examples in your sheet. `No` to ignore them (Default: `No`).
 *   **Model**: Select the model (e.g., `gemini-2.5-flash`).
 *   **Destination Agent**:
     *   **Static**: Enter the exact name of another agent (e.g., `EmailDraft`) to always route there.
@@ -114,7 +116,8 @@ You can insert data into your agents from external tools using a secure webhook.
     {
       "token": "YOUR_SECRET_TOKEN",
       "agentName": "TargetAgentName",
-      "input": "Your input data here"
+      "input": "<div>Your HTML input</div>",
+      "cleanHtml": true
     }
     ```
 
@@ -134,17 +137,28 @@ If you have a large text (like a transcript) on your clipboard and want to paste
 2.  Click **Agent Orchestrator** > **Add Input from Clipboard**.
 3.  The modal will confirm your target (e.g. `Agents!C5`).
 4.  Paste the text into the box and click **Submit**.
-    *   **Append Mode**: Check the "Append" box to add your text to the existing cell content (useful for combining multiple transcripts).
     *   **Large Payload**: If the text is huge (>45k chars), it is automatically cached to Drive and linked.
 
-### 6. Global Notifications (Toast)
+### 5. Training Data & Safety (New)
+To prevent "runaway" costs and context windows, the agent now includes safety filters for Training Data (Few-Shot examples):
+- **Use Training Data**: precise control over whether an agent uses your previous rows as examples.
+- **Auto-Filtering**: Even if enabled, the agent will **ignore** examples that:
+    - Are too long (> 4000 characters combined Input/Output).
+    - Contain external links (http/https), to prevent recursive context explosion.
+
+### 6. HTML Cleaning (Cost Saver)
+You can now strip HTML tags and convert them to Markdown to save 30-40% on token costs.
+- **Clipboard Input**: Check the "Clean HTML to Markdown" box when pasting.
+- **Webhook**: Add `"cleanHtml": true` to your JSON payload.
+
+### 7. Global Notifications (Toast)
 Receive a simple notification when an Agent finishes a batch.
 1.  **Configuration**: Click **Agent Orchestrator** > **Configuration** > **Configure Notifications**.
 2.  **Paste URL**: Enter your webhook URL (e.g., from `ntfy.sh` or similar).
 3.  **Mechanism**: The system sends a **POST** request to your URL with the message appended as a query parameter: `?message=Agent...`.
 4.  **Enable per Agent**: In the **Agents** tab, set **Notify User** to `Yes`.
 
-### 7. Post-Processing Webhook
+### 8. Post-Processing Webhook
 Send the final output of each row to another service (e.g., Zapier, Make) for downstream automation.
 1.  **Agents Tab**: Enter a URL in the **Post-Processing URL** column.
 2.  **Payload**: The system sends a **POST** request with a JSON body:
@@ -156,7 +170,7 @@ Send the final output of each row to another service (e.g., Zapier, Make) for do
     }
     ```
 
-### 8. Structured Data Output
+### 9. Structured Data Output
 To get an agent to return JSON for your Post-Processing webhook, use a prompt like this:
 
 **System Prompt Example:**
@@ -210,7 +224,7 @@ The system supports:
 *   **PDF Errors**: If you see an error about Drive API, ensure you enabled the "Drive API" in the Services menu of the script editor.
 *   **Timeouts**: Maximum execution time is ~6 minutes. The script picks up where it left off on the next run.
 
-### 9. Budget & Cost Management
+### 10. Budget & Cost Management
 Prevent accidental overspending with built-in budgeting tools.
 1.  **Budget Config Sheet**: Run **Setup Agents**. A new tab `Budget Config` will appear.
     *   **Daily Budget**: Set a hard daily limit (e.g. $0.10).

@@ -89,16 +89,34 @@ var AgentRunner = {
 			return false;
 		}
 
-		for (let i = 0; i < data.length; i++) {
-			const row = data[i];
-			const q = row[headers['Quality'] - 1]; // -1 because data array is 0-indexed, headers map is 1-indexed
-			const input = row[headers['Input'] - 1];
-			const output = row[headers['Output'] - 1];
 
-			if ((q === 2 || q === '2') && input && output && goodExamples.length < MAX_EXAMPLES) {
+		for (let i = 0; i < data.length; i++) {
+			// Skip if Training is disabled
+			if (!config.useTrainingData) break;
+
+			const row = data[i];
+			const q = row[headers['Quality'] - 1];
+			let input = row[headers['Input'] - 1];
+			let output = row[headers['Output'] - 1];
+
+			// Validation: Must exist
+			if (!input || !output) continue;
+
+			input = input.toString();
+			output = output.toString();
+
+			// Filter 1: Size (~1000 tokens ≈ 4000 chars)
+			if ((input.length + output.length) > 4000) continue;
+
+			// Filter 2: External References (likely huge context or cache)
+			if (input.includes('https://') || output.includes('https://') || input.includes('http://') || output.includes('http://')) {
+				continue;
+			}
+
+			if ((q === 2 || q === '2') && goodExamples.length < MAX_EXAMPLES) {
 				goodExamples.push({ input: input, output: output });
 			}
-			if ((q === 0 || q === '0') && input && output && badExamples.length < MAX_EXAMPLES) {
+			if ((q === 0 || q === '0') && badExamples.length < MAX_EXAMPLES) {
 				badExamples.push({ input: input, output: output });
 			}
 		}
@@ -197,7 +215,7 @@ ${inputVal}
 				continue; // Skip this row
 			}
 
-			const result = LLMService.callGemini(config.model, systemPrompt, userContent);
+			const result = LLMService.callGemini(config.model, systemPrompt, userContent, 0.7, config.maxOutputTokens);
 
 			if (result.success) {
 				let finalOutput = result.text;

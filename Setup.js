@@ -184,6 +184,8 @@ var Setup = {
 			'Output Description',
 			'Output Example',
 			'Output Format',
+			'Max Output Tokens', // New
+			'Use Training Data', // New
 			'Model',
 			'Destination Agent',
 			'Notify User',        // New
@@ -223,6 +225,8 @@ var Setup = {
 				'A brief summary',
 				'It was a text about Lorem.',
 				'Text', // Output Format
+				500,    // Max Tokens
+				'No',   // Use Training Data
 				'gemini-2.0-flash-exp',
 				''
 			];
@@ -247,6 +251,7 @@ var Setup = {
 		setValidation('Pass Agent Context to Next', ['Yes', 'No']);
 		setValidation('Pass Data Context to Next', ['Yes', 'No']);
 		setValidation('Output Format', ['Text', 'Document', 'Append to Input Doc']);
+		setValidation('Use Training Data', ['Yes', 'No']); // New
 		setValidation('Notify User', ['Yes', 'No']); // New
 
 		// Model Validation
@@ -460,6 +465,7 @@ var Setup = {
         function submitData() {
            var text = document.getElementById('inputData').value;
            var appendArgs = document.getElementById('chkAppend').checked;
+           var cleanArgs = document.getElementById('chkClean').checked;
            
            if (!text.trim()) {
              alert('Input cannot be empty.');
@@ -489,7 +495,7 @@ var Setup = {
                  st.innerText = 'System Error: ' + err;
                  document.getElementById('btnSubmit').disabled = false;
              })
-             .handleClipboardInput('${sheetName}', '${rangeA1}', text, appendArgs);
+             .handleClipboardInput('${sheetName}', '${rangeA1}', text, appendArgs, cleanArgs);
         }
       </script>
       
@@ -499,6 +505,11 @@ var Setup = {
       
       <textarea id="inputData" placeholder="Paste data here..."></textarea>
       
+      <div class="checkbox-group">
+         <input type="checkbox" id="chkClean" name="chkClean">
+         <label for="chkClean" style="display:inline; font-weight:normal;">Clean HTML to Markdown (Saves Tokens)</label>
+      </div>
+
       <div class="checkbox-group">
          <input type="checkbox" id="chkAppend" name="chkAppend">
          <label for="chkAppend" style="display:inline; font-weight:normal;">Append to existing cell content</label>

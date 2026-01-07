@@ -61,7 +61,7 @@ function menuClipboardInput() {
 /**
  * Client-Side Handler: Process Clipboard Input
  */
-function handleClipboardInput(sheetName, rangeA1, text, appendMode) {
+function handleClipboardInput(sheetName, rangeA1, text, appendMode, cleanHtml) {
   try {
     if (!text) throw new Error("Input is empty.");
     if (!sheetName || !rangeA1) throw new Error("Target cell information missing.");
@@ -71,6 +71,11 @@ function handleClipboardInput(sheetName, rangeA1, text, appendMode) {
     if (!sheet) throw new Error(`Sheet "${sheetName}" not found.`);
 
     const range = sheet.getRange(rangeA1);
+
+    // Optional HTML Cleaning
+    if (cleanHtml) {
+      text = Utilities_Helper.convertHtmlToMarkdown(text);
+    }
 
     let existingInput = '';
 
@@ -201,7 +206,13 @@ function doPost(e) {
     if (!agentName) throw new Error('Missing "agentName".');
     if (!input) throw new Error('Missing "input".');
 
+    // Optional: Clean HTML
+    if (json.cleanHtml) {
+      input = Utilities_Helper.convertHtmlToMarkdown(input);
+    }
+
     // Handle Large Payloads (>45k chars) to avoid Cell Limit (50k)
+    // Note: After markdown conversion, it might be smaller!
     if (input.length > 45000) {
       try {
         const cacheUrl = DriveService.saveToCache(agentName, input);

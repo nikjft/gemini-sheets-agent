@@ -69,6 +69,8 @@ var Utilities_Helper = {
 			outputDesc: getIdx('Output Description'),
 			outputExample: getIdx('Output Example'),
 			outputFormat: getIdx('Output Format'),
+			maxOutputTokens: getIdx('Max Output Tokens'),
+			useTrainingData: getIdx('Use Training Data'),
 			model: getIdx('Model'),
 			destination: getIdx('Destination Agent'),
 			notifyUser: getIdx('Notify User'),
@@ -95,6 +97,8 @@ var Utilities_Helper = {
 					outputDesc: row[indices.outputDesc],
 					outputExample: row[indices.outputExample],
 					outputFormat: row[indices.outputFormat] || 'Text', // Default to Text
+					maxOutputTokens: parseInt(row[indices.maxOutputTokens]) || 500, // Default to 500
+					useTrainingData: getVal(indices.useTrainingData).toLowerCase() === 'yes', // Default to False
 					model: row[indices.model],
 					destination: row[indices.destination],
 					notifyUser: getVal(indices.notifyUser),
@@ -103,5 +107,55 @@ var Utilities_Helper = {
 			}
 		}
 		return configs;
+	},
+
+	/**
+	 * Lightweight HTML to Markdown Converter (Regex-based)
+	 */
+	convertHtmlToMarkdown: function (html) {
+		if (!html) return "";
+		let text = html;
+
+		// 1. Block Elements
+		text = text.replace(/<br\s*\/?>/gi, '\n');
+		text = text.replace(/<\/div>/gi, '\n');
+		text = text.replace(/<\/p>/gi, '\n\n');
+		text = text.replace(/<\/h[1-6]>/gi, '\n\n');
+		text = text.replace(/<\/li>/gi, '\n');
+		text = text.replace(/<\/tr>/gi, '\n');
+		text = text.replace(/<hr\s*\/?>/gi, '\n---\n');
+
+		// 2. Headers
+		text = text.replace(/<h1[^>]*>(.*?)<\/h1>/gi, '# $1');
+		text = text.replace(/<h2[^>]*>(.*?)<\/h2>/gi, '## $1');
+		text = text.replace(/<h3[^>]*>(.*?)<\/h3>/gi, '### $1');
+
+		// 3. Formatting
+		text = text.replace(/<strong[^>]*>(.*?)<\/strong>/gi, '**$1**');
+		text = text.replace(/<b[^>]*>(.*?)<\/b>/gi, '**$1**');
+		text = text.replace(/<em[^>]*>(.*?)<\/em>/gi, '_$1_');
+		text = text.replace(/<i[^>]*>(.*?)<\/i>/gi, '_$1_');
+
+		// 4. Links
+		text = text.replace(/<a[^>]*href="([^"]*)"[^>]*>(.*?)<\/a>/gi, '[$2]($1)');
+
+		// 5. Lists (Basic)
+		text = text.replace(/<li[^>]*>(.*?)<\/li>/gi, '- $1');
+
+		// 6. Cleanup Tags
+		text = text.replace(/<[^>]+>/g, ''); // Strip remaining tags
+
+		// 7. Cleanup Entitites
+		text = text.replace(/&nbsp;/g, ' ');
+		text = text.replace(/&amp;/g, '&');
+		text = text.replace(/&lt;/g, '<');
+		text = text.replace(/&gt;/g, '>');
+		text = text.replace(/&quot;/g, '"');
+
+		// 8. Collapse Whitespace
+		text = text.replace(/\n\s+\n/g, '\n\n');
+		text = text.replace(/\n{3,}/g, '\n\n');
+
+		return text.trim();
 	}
 };
