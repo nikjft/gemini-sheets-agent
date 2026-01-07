@@ -5,7 +5,7 @@
 
 var AgentRunner = {
 
-	runAgent: function (agentName, globalStartTime, maxTime) {
+	runAgent: function (agentName, globalStartTime, maxTime, targetRowIndices) {
 		const configs = Utilities_Helper.getAgentsConfiguration();
 		const config = configs[agentName];
 
@@ -60,8 +60,27 @@ var AgentRunner = {
 		let itemsProcessed = 0;
 		let processingErrors = 0;
 
+
 		// Limit examples to avoid massive prompt
 		const MAX_EXAMPLES = 3;
+
+
+
+		// --- PRE-FLIGHT BUDGET CHECK ---
+		// 1. Estimate Cost
+		const heuristicRates = BudgetManager.getModelRates();
+		const estInputTokens = BudgetManager.estimateTokenCount(config.prompt + (goodExamples.length * 200) + 500); // Heuristic Prompt + Examples + Buffer
+		// Better Heuristic: Just estimate based on known prompt length locally? 
+		// Logic: constructSystemPrompt is available. Let's build it? 
+		// No, constructSystemPrompt needs 'rowContext' which isn't available outside the loop.
+		// We can do a General Pre-Check here (Daily/Monthly) with 0 cost to fail fast if already exceeded.
+		const generalCheck = BudgetManager.checkBudgetAvailability(0);
+		if (!generalCheck.safe) {
+			const msg = `Budget Limit Reached: ${generalCheck.reason}. Execution stopped.`;
+			console.error(msg);
+			SpreadsheetApp.getActiveSpreadsheet().toast(msg, 'Budget Limit', -1);
+			return false;
+		}
 
 		for (let i = 0; i < data.length; i++) {
 			const row = data[i];
@@ -90,11 +109,22 @@ var AgentRunner = {
 			}
 
 			const rowIndex = i + 2; // Actual sheet row number
+
+			// STRICT MODE: If specific rows are requested, skip all others
+			if (targetRowIndices && targetRowIndices.length > 0) {
+				if (!targetRowIndices.includes(rowIndex)) {
+					continue;
+				}
+			}
+
 			const row = data[i];
 
 			const status = (row[headers['Process State'] - 1] || '').toString().toLowerCase();
 
 			// Filter: Process only if status is NOT completed, processing, or error
+			// EXCEPTION: If specific rows are requested, we Force Run even if Error? 
+			// User said "Re-process selected row". Usually implies force run.
+			// The Code.js clears the status to '' before calling, so the status check below passes anyway.
 			if (status === 'completed' || status === 'processing' || status === 'error') {
 				continue;
 			}
@@ -135,10 +165,71 @@ ${inputVal}
       `;
 
 			// Call LLM
+
+			// --- HEURISTIC PRE-FLIGHT ONE-OFF CHECK ---
+			const fullPromptEstimate = systemPrompt + userContent;
+			const estInputTok = BudgetManager.estimateTokenCount(fullPromptEstimate);
+			const estOutputTok = 1000; // Safety Assumption
+			const estCost = BudgetManager.calculateCost(config.model, estInputTok, estOutputTok, BudgetManager.getModelRates());
+
+			const preFlight = BudgetManager.checkBudgetAvailability(estCost);
+			if (!preFlight.safe) {
+				const msg = `Stopped Row ${rowIndex}: ${preFlight.reason}`;
+				console.error(msg);
+				sheet.getRange(rowIndex, headers['Process State']).setValue('Budget Limit Hit');
+				// Don't stop entire batch? Or Should we? 
+				// If Per-Run limit hit, just stop this row? 
+				// If Daily limit hit, stop everything.
+				if (preFlight.reason.includes('Daily') || preFlight.reason.includes('Monthly')) {
+					SpreadsheetApp.getActiveSpreadsheet().toast("Daily/Monthly Budget Hit. Stopping.", "Budget Stop", -1);
+					return true; // Stop Batch
+				}
+				// If Per-Run limit, maybe just skip this massive row?
+				sheet.getRange(rowIndex, headers['Error']).setValue(msg);
+				SpreadsheetApp.flush();
+				continue; // Skip this row
+			}
+
 			const result = LLMService.callGemini(config.model, systemPrompt, userContent);
 
 			if (result.success) {
 				let finalOutput = result.text;
+
+				// --- COST & BUDGET TRACKING (New) ---
+				const usage = result.usage || { promptTokens: 0, candidateTokens: 0, totalTokens: 0 };
+				const rates = BudgetManager.getModelRates(); // Re-read or pass in? Reading once at top is better but let's read here for simplicity or optimization?
+				// Optimization: Read rates ONCE at start of runAgent
+
+				const estimatedCost = BudgetManager.calculateCost(config.model, usage.promptTokens, usage.candidateTokens, rates);
+
+				// 1. Log to Processing Log Sheet
+				BudgetManager.logProcessing(
+					agentName,
+					jobId,
+					config.model,
+					usage.promptTokens,
+					usage.candidateTokens,
+					estimatedCost
+				);
+
+				// 2. Check Budget Availability
+				const budgetCheck = BudgetManager.checkBudgetAvailability(0); // Check AFTER add (log already added cost? logic check)
+				// Actually checkBudgetAvailability reads the log. We just added to the log. So checkBudgetAvailability will see the new cost.
+				// We just need to check if 'safe' is false.
+
+				if (!budgetCheck.safe) {
+					console.error("Budget Exceeded: " + budgetCheck.reason);
+					SpreadsheetApp.getActiveSpreadsheet().toast("Budget Exceeded! Stopping execution.", "Budget Alert", -1);
+
+					// Mark current row as completed (we paid for it)
+					sheet.getRange(rowIndex, headers['Output']).setValue(finalOutput);
+					sheet.getRange(rowIndex, headers['Process State']).setValue('Completed');
+					SpreadsheetApp.flush();
+
+					// STOP EXECUTION
+					return true;
+				}
+
 				let routedDestination = config.destination; // Default. If dynamic, this string is ignored/overwritten below.
 
 				// Dynamic Routing Parsing & Cleanup
@@ -260,18 +351,6 @@ ${inputVal}
 		}
 
 		// --- POST-RUN ACTIONS ---
-
-		// 1. Global Notification (if enabled for this agent)
-		const processedCount = data.length; // Simplified for now, ideally we count actuals
-		// Better: We track actual work done in loop
-		// Since we don't have a counter variable outside loop, let's just notify if we did anything.
-		// Actually, `data` contains ALL rows. We only processed some.
-		// Optimization: Retuurn count from loop.
-
-		// Let's do Post-Processing per row inside the loop effectively?
-		// No, user requirement: "Post-Processing Webhook... pass JSON payload... row by row".
-		// OK, so Post-Processing is INSIDE Loop.
-		// Notification is "processed [number] of records". That is OUTSIDE loop.
 
 		// 1. Global Notification (if enabled for this agent)
 		if (config.notifyUser === 'Yes' && (itemsProcessed > 0 || processingErrors > 0)) {

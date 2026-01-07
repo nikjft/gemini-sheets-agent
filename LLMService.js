@@ -68,9 +68,19 @@ var LLMService = {
 				if (code === 200) {
 					const json = JSON.parse(text);
 					if (json.candidates && json.candidates.length > 0 && json.candidates[0].content) {
+
+						// Extract Tokens
+						let usage = { promptTokens: 0, candidateTokens: 0, totalTokens: 0 };
+						if (json.usageMetadata) {
+							usage.promptTokens = json.usageMetadata.promptTokenCount || 0;
+							usage.candidateTokens = json.usageMetadata.candidatesTokenCount || 0;
+							usage.totalTokens = json.usageMetadata.totalTokenCount || 0;
+						}
+
 						return {
 							success: true,
-							text: json.candidates[0].content.parts[0].text
+							text: json.candidates[0].content.parts[0].text,
+							usage: usage
 						};
 					} else {
 						return { success: false, error: 'No content in response' };

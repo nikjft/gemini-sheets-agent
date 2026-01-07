@@ -330,9 +330,8 @@ function menuProcessSelected() {
   // For visual feedback
   SpreadsheetApp.getActiveSpreadsheet().toast('Resetting status for selected rows...', 'Processing');
 
-  // Reset status to empty for selected rows
-  // This is a simplified approach; ideally we check row by row. 
-  // Apps Script ranges are 1-indexed.
+  const targetIndices = [];
+
   ranges.forEach(range => {
     const startRow = range.getRow();
     const numRows = range.getNumRows();
@@ -344,13 +343,22 @@ function menuProcessSelected() {
 
     if (safeNumRows > 0) {
       sheet.getRange(safeStart, headers['Process State'], safeNumRows).setValue('');
+
+      // Collect Indices
+      for (let r = 0; r < safeNumRows; r++) {
+        targetIndices.push(safeStart + r);
+      }
     }
   });
 
   // Now run the agent. It will pick up the blank status rows.
   // Note: This runs the WHOLE agent scan again, picking up these rows.
   // Add 5 minute timeout safety
-  AgentRunner.runAgent(agentName, Date.now(), 1000 * 60 * 5);
+  if (targetIndices.length > 0) {
+    AgentRunner.runAgent(agentName, Date.now(), 1000 * 60 * 5, targetIndices);
+  } else {
+    SpreadsheetApp.getActiveSpreadsheet().toast('No valid rows selected.', 'Warning');
+  }
   SpreadsheetApp.getActiveSpreadsheet().toast('Processing complete.', 'Success');
 }
 

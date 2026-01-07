@@ -38,6 +38,7 @@ This project allows you to orchestrate multi-agent workflows directly within Goo
     *   `LLMService.gs` (copy from `LLMService.js`)
     *   `DriveService.gs` (copy from `DriveService.js`)
     *   `Utilities.gs` (copy from `Utilities.js`)
+    *   `BudgetManager.gs` (copy from `BudgetManager.js`)
     *   `Setup.gs` (copy from `Setup.js`)
 4.  **Important**: To support PDF reading, you must enable the **Drive API** service:
     *   On the left sidebar, click `+` next to **Services**.
@@ -208,6 +209,22 @@ The system supports:
 *   **Permissions**: The first time you run it, you must approve permissions.
 *   **PDF Errors**: If you see an error about Drive API, ensure you enabled the "Drive API" in the Services menu of the script editor.
 *   **Timeouts**: Maximum execution time is ~6 minutes. The script picks up where it left off on the next run.
+
+### 9. Budget & Cost Management
+Prevent accidental overspending with built-in budgeting tools.
+1.  **Budget Config Sheet**: Run **Setup Agents**. A new tab `Budget Config` will appear.
+    *   **Daily Budget**: Set a hard daily limit (e.g. $0.10).
+    *   **Monthly Budget**: Set a hard monthly limit.
+    *   **Per-Run Budget**: Set a limit for a single execution row (e.g. $0.50) to prevent "mega-prompts".
+    *   **Model Pricing**: The sheet comes pre-populated with Gemini pricing. You can update these rates manually as they change.
+        *   **Current Pricing**: [Gemini API Pricing](https://ai.google.dev/gemini-api/docs/pricing)
+2.  **Processing Log**: A `Processing Log` tab records every single agent run, including:
+    *   Timestamp, Agent Name, Job ID.
+    *   Tokens In/Out.
+    *   **Estimated Cost** (based on your rates).
+3.  **Enforcement**:
+    *   **Pre-Flight Check**: The system estimates token count (Length/4) before sending data. If the estimated cost exceeds your **Per-Run**, **Daily**, or **Monthly** limit, it skips the row or stops execution.
+    *   **Post-Run Check**: It audits the exact cost after execution.
 
 ## License & Disclaimer
 
