@@ -206,6 +206,14 @@ var AgentRunner = {
 			if (contextObj && contextObj.history) {
 				userContent += `### HISTORY OF PREVIOUS AGENTS:\n`;
 				for (const [agent, data] of Object.entries(contextObj.history)) {
+					// DEDUPLICATION CHECK:
+					// If the output of a previous agent is IDENTICAL to the current input,
+					// we skip adding it to the Context block to save tokens.
+					// The model will see it in the "INPUT DATA" block anyway.
+					if (data.output && inputVal && data.output.trim() === inputVal.trim()) {
+						continue; // Skip this entry
+					}
+
 					userContent += `\n--- [Agent: ${agent}] ---\n`;
 					if (data.input) userContent += `INPUT: ${data.input}\n`;
 					if (data.output) userContent += `OUTPUT: ${data.output}\n`;

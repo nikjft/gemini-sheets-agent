@@ -353,7 +353,13 @@ function menuProcessSelected() {
     const safeNumRows = (startRow < 2) ? numRows - 1 : numRows;
 
     if (safeNumRows > 0) {
+      // Clear Process State to trigger re-run
       sheet.getRange(safeStart, headers['Process State'], safeNumRows).setValue('');
+
+      // Clear Output, Error, and Quality to ensure clean state
+      if (headers['Output']) sheet.getRange(safeStart, headers['Output'], safeNumRows).setValue('');
+      if (headers['Error']) sheet.getRange(safeStart, headers['Error'], safeNumRows).setValue('');
+      if (headers['Quality']) sheet.getRange(safeStart, headers['Quality'], safeNumRows).setValue('');
 
       // Collect Indices
       for (let r = 0; r < safeNumRows; r++) {
