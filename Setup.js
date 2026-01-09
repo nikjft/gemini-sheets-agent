@@ -506,7 +506,7 @@ var Setup = {
       
       <div class="checkbox-group">
          <input type="checkbox" id="chkClean" name="chkClean">
-         <label for="chkClean" style="display:inline; font-weight:normal;">Clean HTML to Markdown (Saves Tokens)</label>
+         <label for="chkClean" style="display:inline; font-weight:normal;">Simplify HTML (Saves Tokens)</label>
       </div>
 
       <div class="checkbox-group">
