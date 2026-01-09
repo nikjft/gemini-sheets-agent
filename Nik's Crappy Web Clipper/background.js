@@ -1,150 +1,166 @@
 // background.js
 
+// 1. Initialization
 chrome.runtime.onInstalled.addListener(() => {
     chrome.contextMenus.create({
-        id: "configureClipper",
-        title: "Configure Clipper Settings",
-        contexts: ["action"]
+        id: "clip_selection",
+        title: "Clip Selection to Service",
+        contexts: ["selection"]
+    });
+    chrome.contextMenus.create({
+        id: "clip_page",
+        title: "Clip Page to Service",
+        contexts: ["page", "frame"]
     });
 });
 
-chrome.contextMenus.onClicked.addListener((info, tab) => {
-    if (info.menuItemId === "configureClipper") {
-        openSettingsWindow();
+// 2. Context Menu Handler
+chrome.contextMenus.onClicked.addListener(async (info, tab) => {
+    const textToClip = info.selectionText || "";
+    await handleClipRequest(tab, textToClip);
+});
+
+// 3. Message Handler (From Content Script Picker)
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    if (message.action === "execute_service") {
+        // User manually selected a service from the picker
+        executeWebhook(message.service, message.data, sender.tab.id);
     }
 });
 
-function openSettingsWindow() {
-    chrome.windows.create({
-        url: "popup.html",
-        type: "popup",
-        width: 420,
-        height: 600
-    });
+// 4. Core Logic
+async function handleClipRequest(tab, selectionText) {
+    const services = (await chrome.storage.local.get('services')).services || [];
+    const rules = (await chrome.storage.local.get('rules')).rules || [];
+
+    // Get full page data if needed (title, url)
+    // We already have tab.url and tab.title from the 'tab' object usually, but let's confirm
+    const data = {
+        text: selectionText, // Might be empty if they clicked "Clip Page" without selection
+        title: tab.title,
+        url: tab.url
+    };
+
+    // If no text selected, try to grab page text? 
+    // Or just leave it empty and let the prompt handle it?
+    // Let's grab full body text if selection is empty, as a fallback "Whole Page Clip"
+    if (!data.text) {
+        try {
+            const result = await chrome.scripting.executeScript({
+                target: { tabId: tab.id },
+                func: () => document.body.innerText
+            });
+            data.text = result[0].result;
+        } catch (e) {
+            console.warn("Could not grab page text", e);
+        }
+    }
+
+    // Checking Rules
+    const matchedServiceId = findServiceForRule(data.url, rules);
+
+    if (matchedServiceId) {
+        const service = services.find(s => s.id === matchedServiceId);
+        if (service) {
+            await executeWebhook(service, data, tab.id);
+            return;
+        }
+    }
+
+    // No Rule matched: Show Picker
+    await showServicePicker(tab.id, services, data);
 }
 
-chrome.action.onClicked.addListener(async (tab) => {
-    const config = await chrome.storage.local.get(['geminiApiKey', 'scriptUrl', 'prompt', 'appPassword']);
-    
-    if (!config.geminiApiKey || !config.scriptUrl || !config.appPassword) {
-        console.log("Configuration missing, opening settings...");
-        openSettingsWindow();
-        return;
+function findServiceForRule(url, rules) {
+    for (const rule of rules) {
+        try {
+            const regex = new RegExp(rule.pattern, 'i');
+            if (regex.test(url)) {
+                return rule.serviceId;
+            }
+        } catch (e) {
+            console.warn("Invalid Regex in rule:", rule);
+        }
     }
+    return null;
+}
+
+// 5. Execution
+async function executeWebhook(service, data, tabId) {
+    // Notify UI: Loading
+    await sendMessageToTab(tabId, { action: "ui_loading" });
 
     try {
-        await chrome.scripting.executeScript({
-            target: { tabId: tab.id },
-            files: ['content.js']
-        });
-        
-        await sendMessageToTab(tab.id, { action: "ui_loading" });
-        await handleJobProcessing(tab, config);
+        // Variable Substitution
+        let body = service.bodyTemplate
+            .replace(/{{TEXT}}/g, escapeJSONString(data.text))
+            .replace(/{{URL}}/g, data.url) // URL is usually safe in JSON if quoted, but maybe escape?
+            .replace(/{{TITLE}}/g, escapeJSONString(data.title));
 
-    } catch (err) {
-        console.error("Clipping Error:", err);
-        await sendMessageToTab(tab.id, { action: "ui_error", message: err.message });
+        // Parse to JSON to ensure validity (User provided a string template)
+        // If the user's template is "{"a": "{{TEXT}}"}" -> Replaced -> parse
+        // If it fails, they wrote bad JSON.
+        let payload;
+        try {
+            payload = JSON.parse(body);
+        } catch (e) {
+            // Fallback: If they just want to send raw string? 
+            // Usually we enforce JSON. Let's error for now.
+            throw new Error("Invalid JSON Body Template after substitution. Check your quotes/escaping.");
+        }
+
+        const response = await fetch(service.url, {
+            method: service.method || "POST",
+            headers: {
+                "Content-Type": "application/json",
+                ...(service.headers || {})
+            },
+            body: JSON.stringify(payload)
+        });
+
+        if (!response.ok) {
+            throw new Error(`Service Error: ${response.status} ${response.statusText}`);
+        }
+
+        const resultText = await response.text();
+
+        // Notify UI: Success
+        await sendMessageToTab(tabId, { action: "ui_success", details: `Sent to ${service.name}` });
+
+    } catch (e) {
+        console.error(e);
+        await sendMessageToTab(tabId, { action: "ui_error", message: e.message });
     }
-});
+}
+
+// 6. Helpers
+async function showServicePicker(tabId, services, data) {
+    // Inject content script if not there (Manifest does this, but good to be safe?)
+    // Actually manifest "matches": ["<all_urls>"] does it.
+
+    // Send message to open modal
+    await sendMessageToTab(tabId, {
+        action: "open_picker",
+        services: services,
+        data: data
+    });
+}
 
 async function sendMessageToTab(tabId, message) {
     try {
         await chrome.tabs.sendMessage(tabId, message);
     } catch (e) {
-        console.warn("Could not send message to tab.", e);
+        // Content script might not be loaded on internal chrome:// pages or if refreshing
+        console.warn("Tab message failed", e);
     }
 }
 
-async function handleJobProcessing(tab, config) {
-    const injectionResults = await chrome.scripting.executeScript({
-        target: { tabId: tab.id },
-        func: () => {
-            return {
-                text: document.body.innerText,
-                title: document.title,
-                url: window.location.href
-            };
-        }
-    });
-    
-    if (!injectionResults || !injectionResults[0]) {
-        throw new Error("Could not read page content.");
-    }
-
-    const pageData = injectionResults[0].result;
-
-    let enhancedPrompt = config.prompt
-        .replace("{{URL}}", pageData.url)
-        .replace("{{TITLE}}", pageData.title)
-        .replace("{{TEXT}}", "");
-
-    const geminiData = await callGemini(pageData.text, enhancedPrompt, config.geminiApiKey);
-
-    // Job Agent v6.3 Payload Structure
-    const payload = {
-        password: config.appPassword,
-        score: true, // Always true for new clips
-        data: geminiData
-    };
-
-    // Failsafe checks
-    if (!payload.data["Job URL"]) payload.data["Job URL"] = pageData.url;
-    if (!payload.data["Source"]) payload.data["Source"] = "Chrome Extension";
-
-    await sendToSheet(payload, config.scriptUrl);
-
-    await sendMessageToTab(tab.id, { 
-        action: "ui_success", 
-        details: `${payload.data["Company"] || "Unknown Co"} - ${payload.data["Job Title"] || "Job"}` 
-    });
-}
-
-async function callGemini(text, systemPrompt, apiKey) {
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
-    const truncatedText = text.substring(0, 30000); 
-
-    const requestBody = {
-        contents: [{
-            parts: [{ text: systemPrompt + "\n\nJob Listing Page Text:\n" + truncatedText }]
-        }],
-        generationConfig: {
-            responseMimeType: "application/json"
-        }
-    };
-
-    const response = await fetch(url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(requestBody)
-    });
-
-    if (!response.ok) {
-        const errText = await response.text();
-        throw new Error(`Gemini API Error (${response.status}): ${errText}`);
-    }
-
-    const json = await response.json();
-    try {
-        const rawText = json.candidates[0].content.parts[0].text;
-        return JSON.parse(rawText);
-    } catch (e) {
-        console.error("Gemini Parse Error. Raw response:", json);
-        throw new Error("Failed to parse Gemini JSON response.");
-    }
-}
-
-async function sendToSheet(payload, scriptUrl) {
-    const response = await fetch(scriptUrl, {
-        method: "POST",
-        body: JSON.stringify(payload)
-    });
-
-    if (!response.ok) {
-        throw new Error(`Webhook Error (${response.status}): ${response.statusText}`);
-    }
-    
-    const result = await response.json();
-    if (result.status === "error") {
-        throw new Error("Server Error: " + result.message);
-    }
+function escapeJSONString(str) {
+    if (!str) return "";
+    return str
+        .replace(/\\/g, '\\\\')
+        .replace(/\n/g, '\\n')
+        .replace(/\r/g, '\\r')
+        .replace(/\t/g, '\\t')
+        .replace(/"/g, '\\"');
 }

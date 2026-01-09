@@ -1,100 +1,275 @@
-document.addEventListener('DOMContentLoaded', () => {
-    const fields = ['geminiApiKey', 'scriptUrl', 'prompt', 'appPassword'];
-    
-    // NEW: Job Agent v6.3 Spec Prompt
-    const DEFAULT_PROMPT = `Role: Job Data Integration Agent
-Objective: Format job listing data into a precise JSON payload for the Job Agent Webhook.
-Context:
-You are viewing a job posting. You must extract the details and structure them for an Upsert operation (Update existing or Insert new) in the backend database.
-Input Data:
-- Browser URL: {{URL}}
-- Page Title: {{TITLE}}
-- Page Text: {{TEXT}}
+// popup.js
 
-Required JSON Payload Structure:
-{
-    "Job Title": "{{Extracted Title}}",
-    "Company": "{{Extracted Company Name}}",
-    "Job URL": "{{Extracted URL - CRITICAL: This is the fallback Match Key. Use the Browser URL provided, but strip session tracking params.}}",
-    "Location": "{{Extracted Location or 'Remote'}}",
-    "Full Job Description": "{{Full text of the job posting, formatted as clean Markdown}}",
-    "Salary": "{{Extracted Salary or null}}",
-    "Source": "Chrome Extension" 
-}
+document.addEventListener('DOMContentLoaded', async () => {
+    // State
+    let services = [];
+    let rules = [];
+    let editingServiceId = null;
+    let editingRuleId = null;
 
-Critical Rules:
-1. Keys Case-Sensitivity: The keys MUST match the list above exactly.
-2. Unique Identifier: The "Job URL" is the primary match key. Ensure it is accurate.
-3. Missing Data: If a field is not found (e.g., Salary), omit the key or set it to an empty string "".
-4. Return ONLY valid JSON.`;
+    // Elements
+    const tabServices = document.querySelector('[data-tab="tab-services"]');
+    const tabRules = document.querySelector('[data-tab="tab-rules"]');
+    const contentServices = document.getElementById('tab-services');
+    const contentRules = document.getElementById('tab-rules');
 
-    const statusDiv = document.getElementById('statusMsg');
-    const saveBtn = document.getElementById('saveBtn');
-    const resetBtn = document.getElementById('resetBtn');
+    // Initial Load
+    await loadData();
+    renderServices();
+    renderRules();
 
-    // 1. Load Settings
-    chrome.storage.local.get(fields, (result) => {
-        if (result.geminiApiKey) document.getElementById('geminiApiKey').value = result.geminiApiKey;
-        if (result.scriptUrl) document.getElementById('scriptUrl').value = result.scriptUrl;
-        if (result.appPassword) document.getElementById('appPassword').value = result.appPassword;
-        
-        // Handle Prompt: Use stored value OR default
-        if (result.prompt && result.prompt.trim() !== "") {
-            document.getElementById('prompt').value = result.prompt;
+    // --- Tab Switching ---
+    tabServices.addEventListener('click', () => switchTab('services'));
+    tabRules.addEventListener('click', () => switchTab('rules'));
+
+    function switchTab(tab) {
+        if (tab === 'services') {
+            tabServices.classList.add('active');
+            tabRules.classList.remove('active');
+            contentServices.classList.add('active');
+            contentRules.classList.remove('active');
         } else {
-            console.log("No prompt found, setting default.");
-            document.getElementById('prompt').value = DEFAULT_PROMPT;
+            tabRules.classList.add('active');
+            tabServices.classList.remove('active');
+            contentRules.classList.add('active');
+            contentServices.classList.remove('active');
         }
+    }
+
+    // --- Services Logic ---
+
+    // Open Add Modal
+    document.getElementById('addServiceBtn').addEventListener('click', () => {
+        editingServiceId = null;
+        document.getElementById('editorTitle').textContent = "Add New Service";
+        document.getElementById('editName').value = "";
+        document.getElementById('editUrl').value = "";
+        document.getElementById('editMethod').value = "POST";
+        document.getElementById('editHeaders').value = "";
+        // Default Template
+        document.getElementById('editBody').value = JSON.stringify({
+            text: "{{TEXT}}",
+            url: "{{URL}}",
+            title: "{{TITLE}}"
+        }, null, 2);
+
+        document.getElementById('deleteServiceBtn').classList.add('hidden');
+        document.getElementById('serviceEditor').classList.remove('hidden');
     });
 
-    // 2. Save Handler
-    saveBtn.addEventListener('click', () => {
-        const config = {
-            geminiApiKey: document.getElementById('geminiApiKey').value.trim(),
-            scriptUrl: document.getElementById('scriptUrl').value.trim(),
-            prompt: document.getElementById('prompt').value.trim(),
-            appPassword: document.getElementById('appPassword').value.trim()
+    // Save Service
+    document.getElementById('saveServiceBtn').addEventListener('click', async () => {
+        const name = document.getElementById('editName').value.trim();
+        const url = document.getElementById('editUrl').value.trim();
+        const method = document.getElementById('editMethod').value;
+        const headersStr = document.getElementById('editHeaders').value.trim();
+        const bodyStr = document.getElementById('editBody').value.trim();
+
+        if (!name || !url) return alert("Name and URL are required.");
+
+        let headers = {};
+        if (headersStr) {
+            try { headers = JSON.parse(headersStr); } catch (e) { return alert("Invalid Headers JSON"); }
+        }
+
+        // Validate Body JSON structure (it's a template, but should be valid json structure)
+        // Actually, since it contains {{VAR}} which might break JSON if not careful, we usually just store string.
+        // But let's check basic syntax.
+
+        const newService = {
+            id: editingServiceId || crypto.randomUUID(),
+            name,
+            url,
+            method,
+            headers,
+            bodyTemplate: bodyStr
         };
 
-        if (!config.geminiApiKey || !config.scriptUrl || !config.appPassword) {
-            statusDiv.textContent = "Error: All fields are required.";
-            statusDiv.className = "status error";
+        if (editingServiceId) {
+            const idx = services.findIndex(s => s.id === editingServiceId);
+            if (idx !== -1) services[idx] = newService;
+        } else {
+            services.push(newService);
+        }
+
+        await saveData();
+        renderServices();
+        document.getElementById('serviceEditor').classList.add('hidden');
+    });
+
+    // Delete Service
+    document.getElementById('deleteServiceBtn').addEventListener('click', async () => {
+        if (!confirm("Delete this service?")) return;
+        services = services.filter(s => s.id !== editingServiceId);
+        // Also remove rules using this service
+        rules = rules.filter(r => r.serviceId !== editingServiceId);
+        await saveData();
+        renderServices();
+        renderRules(); // Update rules list in case some were removed
+        document.getElementById('serviceEditor').classList.add('hidden');
+    });
+
+    // Cancel Edit
+    document.getElementById('cancelEditBtn').addEventListener('click', () => {
+        document.getElementById('serviceEditor').classList.add('hidden');
+    });
+
+    // Edit Existing Service
+    window.editService = (id) => {
+        const s = services.find(x => x.id === id);
+        if (!s) return;
+        editingServiceId = id;
+        document.getElementById('editorTitle').textContent = "Edit Service";
+        document.getElementById('editName').value = s.name;
+        document.getElementById('editUrl').value = s.url;
+        document.getElementById('editMethod').value = s.method || "POST";
+        document.getElementById('editHeaders').value = JSON.stringify(s.headers || {}, null, 2);
+        document.getElementById('editBody').value = s.bodyTemplate || "";
+
+        document.getElementById('deleteServiceBtn').classList.remove('hidden');
+        document.getElementById('serviceEditor').classList.remove('hidden');
+    };
+
+
+    // --- Rules Logic ---
+
+    // Open Add Rule
+    document.getElementById('addRuleBtn').addEventListener('click', () => {
+        editingRuleId = null;
+        populateServiceDropdown();
+        document.getElementById('editPattern').value = "";
+        document.getElementById('editRuleService').value = services[0] ? services[0].id : "";
+        document.getElementById('deleteRuleBtn').classList.add('hidden');
+        document.getElementById('ruleEditor').classList.remove('hidden');
+    });
+
+    // Save Rule
+    document.getElementById('saveRuleBtn').addEventListener('click', async () => {
+        const pattern = document.getElementById('editPattern').value.trim();
+        const serviceId = document.getElementById('editRuleService').value;
+
+        if (!pattern || !serviceId) return alert("Pattern and Service required.");
+
+        const newRule = {
+            id: editingRuleId || crypto.randomUUID(),
+            pattern,
+            serviceId
+        };
+
+        if (editingRuleId) {
+            const idx = rules.findIndex(r => r.id === editingRuleId);
+            if (idx !== -1) rules[idx] = newRule;
+        } else {
+            rules.push(newRule);
+        }
+
+        await saveData();
+        renderRules();
+        document.getElementById('ruleEditor').classList.add('hidden');
+    });
+
+    // Delete Rule
+    document.getElementById('deleteRuleBtn').addEventListener('click', async () => {
+        if (!confirm("Delete this rule?")) return;
+        rules = rules.filter(r => r.id !== editingRuleId);
+        await saveData();
+        renderRules();
+        document.getElementById('ruleEditor').classList.add('hidden');
+    });
+
+    // Cancel Rule
+    document.getElementById('cancelRuleBtn').addEventListener('click', () => {
+        document.getElementById('ruleEditor').classList.add('hidden');
+    });
+
+    window.editRule = (id) => {
+        const r = rules.find(x => x.id === id);
+        if (!r) return;
+        editingRuleId = id;
+        populateServiceDropdown();
+        document.getElementById('editPattern').value = r.pattern;
+        document.getElementById('editRuleService').value = r.serviceId;
+
+        document.getElementById('deleteRuleBtn').classList.remove('hidden');
+        document.getElementById('ruleEditor').classList.remove('hidden');
+    };
+
+
+    // --- Persistence ---
+    async function loadData() {
+        const data = await chrome.storage.local.get(['services', 'rules']);
+        services = data.services || [];
+        rules = data.rules || [];
+    }
+
+    async function saveData() {
+        await chrome.storage.local.set({ services, rules });
+    }
+
+    // --- Rendering ---
+    function renderServices() {
+        const list = document.getElementById('servicesList');
+        list.innerHTML = "";
+        if (services.length === 0) {
+            list.innerHTML = `<div class="text-center text-gray-400 py-4">No services configured.</div>`;
             return;
         }
-
-        chrome.storage.local.set(config, () => {
-            if (chrome.runtime.lastError) {
-                statusDiv.textContent = "Error: " + chrome.runtime.lastError.message;
-                statusDiv.className = "status error";
-            } else {
-                statusDiv.textContent = "Settings Saved!";
-                statusDiv.className = "status success";
-                
-                // Button feedback
-                saveBtn.textContent = "Saved ✓";
-                saveBtn.style.backgroundColor = "#10b981"; // Green
-                setTimeout(() => {
-                    saveBtn.textContent = "Save Settings";
-                    saveBtn.style.backgroundColor = "#4f46e5"; // Back to Indigo
-                    statusDiv.textContent = "";
-                }, 1500);
-            }
+        services.forEach(s => {
+            const div = document.createElement('div');
+            div.className = "card flex justify-between items-center cursor-pointer hover:shadow-md transition";
+            div.onclick = () => window.editService(s.id);
+            div.innerHTML = `
+                <div>
+                    <div class="font-bold text-gray-800">${escapeHtml(s.name)}</div>
+                    <div class="text-xs text-gray-500 truncate w-64">${escapeHtml(s.url)}</div>
+                </div>
+                <div class="text-gray-400">›</div>
+            `;
+            list.appendChild(div);
         });
-    });
+    }
 
-    // 3. Reset Handler
-    resetBtn.addEventListener('click', (e) => {
-        e.preventDefault();
-        if (confirm("Reset all settings? You will need to re-enter your keys.")) {
-            chrome.storage.local.clear(() => {
-                document.getElementById('geminiApiKey').value = "";
-                document.getElementById('scriptUrl').value = "";
-                document.getElementById('appPassword').value = "";
-                document.getElementById('prompt').value = DEFAULT_PROMPT; 
-                
-                statusDiv.textContent = "Settings Reset.";
-                statusDiv.className = "status error";
-            });
+    function renderRules() {
+        const list = document.getElementById('rulesList');
+        list.innerHTML = "";
+        if (rules.length === 0) {
+            list.innerHTML = `<div class="text-center text-gray-400 py-4">No rules defined.</div>`;
+            return;
         }
-    });
+        rules.forEach(r => {
+            const serviceName = services.find(s => s.id === r.serviceId)?.name || "?";
+            const div = document.createElement('div');
+            div.className = "card flex justify-between items-center cursor-pointer hover:shadow-md transition";
+            div.onclick = () => window.editRule(r.id);
+            div.innerHTML = `
+                <div>
+                    <div class="font-mono text-sm text-indigo-600">${escapeHtml(r.pattern)}</div>
+                    <div class="text-xs text-gray-500">→ ${escapeHtml(serviceName)}</div>
+                </div>
+                <div class="text-gray-400">›</div>
+            `;
+            list.appendChild(div);
+        });
+    }
+
+    function populateServiceDropdown() {
+        const sel = document.getElementById('editRuleService');
+        sel.innerHTML = "";
+        services.forEach(s => {
+            const opt = document.createElement('option');
+            opt.value = s.id;
+            opt.textContent = s.name;
+            sel.appendChild(opt);
+        });
+    }
+
+    function escapeHtml(str) {
+        if (!str) return "";
+        return str
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;")
+            .replace(/'/g, "&#039;");
+    }
 });

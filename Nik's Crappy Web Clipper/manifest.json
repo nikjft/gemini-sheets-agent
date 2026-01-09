@@ -3,6 +3,9 @@
     "name": "Nik's crappy web clipper",
     "version": "2.3",
     "description": "One-click clipping to a web service of your choice.",
+    "host_permissions": [
+        "<all_urls>"
+    ],
     "permissions": [
         "activeTab",
         "scripting",

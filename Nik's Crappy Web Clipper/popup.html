@@ -2,51 +2,114 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Clipper Settings</title>
+    <title>Clipper Config</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        body { width: 100%; height: 100%; padding: 1rem; font-family: 'Inter', sans-serif; box-sizing: border-box; }
-        .input-group { margin-bottom: 0.75rem; }
-        label { display: block; font-size: 0.75rem; font-weight: 600; color: #4a5568; margin-bottom: 0.25rem; }
-        input, textarea { width: 100%; border: 1px solid #cbd5e0; padding: 0.5rem; border-radius: 0.375rem; font-size: 0.875rem; }
-        textarea { height: 150px; resize: vertical; font-family: monospace; font-size: 0.75rem; }
-        button { width: 100%; padding: 0.75rem; border-radius: 0.375rem; font-weight: 600; color: white; transition: 0.2s; }
-        .btn-primary { background-color: #4f46e5; }
-        .btn-primary:hover { background-color: #4338ca; }
-        .status { margin-top: 0.5rem; text-align: center; font-size: 0.875rem; min-height: 1.25rem; }
-        .success { color: #10b981; }
-        .error { color: #ef4444; }
-        .reset-link { display: block; text-align: center; margin-top: 1rem; font-size: 0.75rem; color: #a0aec0; text-decoration: underline; cursor: pointer; }
-        .reset-link:hover { color: #ef4444; }
+        body { width: 450px; min-height: 600px; padding: 0; font-family: 'Inter', sans-serif; background: #f9fafb; }
+        .tab-btn { padding: 10px; flex: 1; text-align: center; cursor: pointer; border-bottom: 2px solid transparent; font-weight: 500; color: #6b7280; }
+        .tab-btn.active { border-bottom-color: #4f46e5; color: #4f46e5; }
+        .content { padding: 20px; display: none; }
+        .content.active { display: block; }
+        .card { background: white; border: 1px solid #e5e7eb; border-radius: 8px; padding: 12px; margin-bottom: 12px; }
+        label { display: block; font-size: 0.75rem; font-weight: 700; color: #374151; margin-bottom: 4px; }
+        input, select, textarea { width: 100%; border: 1px solid #d1d5db; border-radius: 6px; padding: 8px; font-size: 0.875rem; margin-bottom: 12px; }
+        textarea { font-family: monospace; font-size: 12px; height: 100px; }
+        .btn { width: 100%; padding: 10px; border-radius: 6px; font-weight: 600; color: white; cursor: pointer; transition: 0.2s; text-align: center; }
+        .btn-primary { background: #4f46e5; }
+        .btn-primary:hover { background: #4338ca; }
+        .btn-danger { background: #ef4444; }
+        .btn-sm { padding: 4px 8px; font-size: 12px; width: auto; display: inline-block; }
+        .header-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
     </style>
 </head>
-<body class="bg-gray-50">
-    <h1 class="text-xl font-bold text-gray-800 mb-4">Clipper Configuration</h1>
+<body>
 
-    <div class="input-group">
-        <label for="appPassword">App Password</label>
-        <input type="password" id="appPassword" placeholder="Paste UUID from Script Logs">
+    <!-- Tabs -->
+    <div class="flex bg-white border-b border-gray-200">
+        <div class="tab-btn active" data-tab="tab-services">Services</div>
+        <div class="tab-btn" data-tab="tab-rules">Rules</div>
     </div>
 
-    <div class="input-group">
-        <label for="geminiApiKey">Gemini API Key</label>
-        <input type="password" id="geminiApiKey" placeholder="AIzaSy...">
+    <!-- Services Tab -->
+    <div id="tab-services" class="content active">
+        <div class="header-row">
+            <h2 class="text-lg font-bold text-gray-800">Your Services</h2>
+            <button id="addServiceBtn" class="btn btn-sm btn-primary">+ Add New</button>
+        </div>
+        
+        <div id="servicesList" class="space-y-2">
+            <!-- Service Cards Injected Here -->
+        </div>
+
+        <!-- Edit Form Modal (Inline for simplicity) -->
+        <div id="serviceEditor" class="hidden fixed inset-0 bg-gray-900 bg-opacity-50 flex items-center justify-center p-4">
+            <div class="bg-white rounded-lg w-full max-w-sm max-h-[90vh] overflow-y-auto p-4 shadow-xl">
+                <h3 class="text-lg font-bold mb-4" id="editorTitle">Edit Service</h3>
+                <input type="hidden" id="editId">
+                
+                <label>Name</label>
+                <input type="text" id="editName" placeholder="e.g. My Sheet">
+                
+                <label>Webhook URL</label>
+                <input type="text" id="editUrl" placeholder="https://...">
+
+                <label>Method</label>
+                <select id="editMethod">
+                    <option value="POST">POST</option>
+                    <option value="GET">GET</option>
+                    <option value="PUT">PUT</option>
+                </select>
+
+                <label>Headers (JSON)</label>
+                <textarea id="editHeaders" placeholder='{"Authorization": "Bearer..."}'></textarea>
+
+                <label>Body Template (JSON)</label>
+                <div class="text-xs text-gray-400 mb-1">Vars: {{TEXT}}, {{TITLE}}, {{URL}}</div>
+                <textarea id="editBody" style="height: 150px;" placeholder='{ "text": "{{TEXT}}" }'></textarea>
+
+                <div class="flex gap-2">
+                    <button id="saveServiceBtn" class="btn btn-primary">Save</button>
+                    <button id="cancelEditBtn" class="btn bg-gray-300 text-gray-800 hover:bg-gray-400">Cancel</button>
+                </div>
+                <button id="deleteServiceBtn" class="btn btn-danger mt-2 hidden">Delete Service</button>
+            </div>
+        </div>
     </div>
 
-    <div class="input-group">
-        <label for="scriptUrl">Apps Script Web App URL</label>
-        <input type="text" id="scriptUrl" placeholder="https://script.google.com/macros/s/...">
+    <!-- Rules Tab -->
+    <div id="tab-rules" class="content">
+        <div class="header-row">
+            <h2 class="text-lg font-bold text-gray-800">Domain Rules</h2>
+            <button id="addRuleBtn" class="btn btn-sm btn-primary">+ Add Rule</button>
+        </div>
+        <p class="text-xs text-gray-500 mb-4">Regex patterns matched against the page URL.</p>
+
+        <div id="rulesList" class="space-y-2">
+             <!-- Rule Cards Injected Here -->
+        </div>
+
+        <!-- Rule Editor -->
+         <div id="ruleEditor" class="hidden fixed inset-0 bg-gray-900 bg-opacity-50 flex items-center justify-center p-4">
+            <div class="bg-white rounded-lg w-full max-w-sm p-4 shadow-xl">
+                <h3 class="text-lg font-bold mb-4">Edit Rule</h3>
+                <input type="hidden" id="editRuleId">
+
+                <label>URL Regex Pattern</label>
+                <input type="text" id="editPattern" placeholder="e.g. linkedin\.com">
+
+                <label>Default Service</label>
+                <select id="editRuleService">
+                    <!-- Options populated via JS -->
+                </select>
+
+                <div class="flex gap-2">
+                    <button id="saveRuleBtn" class="btn btn-primary">Save</button>
+                    <button id="cancelRuleBtn" class="btn bg-gray-300 text-gray-800 hover:bg-gray-400">Cancel</button>
+                </div>
+                 <button id="deleteRuleBtn" class="btn btn-danger mt-2 hidden">Delete Rule</button>
+            </div>
+        </div>
     </div>
-
-    <div class="input-group">
-        <label for="prompt">Extraction Prompt</label>
-        <textarea id="prompt"></textarea>
-    </div>
-
-    <button id="saveBtn" class="btn-primary">Save Settings</button>
-    <div id="statusMsg" class="status"></div>
-
-    <a id="resetBtn" class="reset-link">Problems? Reset all settings.</a>
 
     <script src="popup.js"></script>
 </body>
