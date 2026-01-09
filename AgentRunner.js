@@ -175,19 +175,48 @@ var AgentRunner = {
 			}
 
 			// Prepare Context
+			// Prepare Context
 			let rowContext = row[headers['Context'] - 1] || '';
-			// Expand Drive Links in Data Context
-			rowContext = DriveService.processContext(rowContext);
+			let contextObj = null;
+
+			// Structured Context Parsing
+			// We attempt to parse the context as the new JSON container format
+			try {
+				if (rowContext.trim().startsWith('{')) {
+					contextObj = JSON.parse(rowContext);
+				}
+			} catch (e) {
+				// Not JSON, treat as legacy string string
+				contextObj = null;
+			}
+
+			// Expand Drive Links in Data Context (Legacy support + Structured support)
+			// If it's legacy string, we process it directly.
+			// If it's structured, we might process values inside? For now, let's assume the previous agent already processed links before handing off.
+			// Actually, if we just received a raw string from a human in the first step, it might have a link.
+			if (!contextObj) {
+				rowContext = DriveService.processContext(rowContext);
+			}
 
 			// Construct Prompt
-			const systemPrompt = this.constructSystemPrompt(config, goodExamples, badExamples);
-			const userContent = `
-CONTEXT:
-${rowContext}
+			const systemPrompt = this.constructSystemPrompt(config, goodExamples, badExamples, contextObj);
+			let userContent = ``;
 
-INPUT DATA:
-${inputVal}
-      `;
+			// Construct User Message with Structured History if available
+			if (contextObj && contextObj.history) {
+				userContent += `### HISTORY OF PREVIOUS AGENTS:\n`;
+				for (const [agent, data] of Object.entries(contextObj.history)) {
+					userContent += `\n--- [Agent: ${agent}] ---\n`;
+					if (data.input) userContent += `INPUT: ${data.input}\n`;
+					if (data.output) userContent += `OUTPUT: ${data.output}\n`;
+				}
+				userContent += `\n--- [CURRENT TASK] ---\n`;
+			} else if (!contextObj && rowContext) {
+				// Legacy / Simple String Context
+				userContent += `CONTEXT:\n${rowContext}\n\n`;
+			}
+
+			userContent += `INPUT DATA:\n${inputVal}`;
 
 			// Call LLM
 
@@ -409,7 +438,7 @@ ${inputVal}
 	/**
 	 * Constructs the System Prompt based on configuration and examples
 	 */
-	constructSystemPrompt: function (config, goodExamples, badExamples) {
+	constructSystemPrompt: function (config, goodExamples, badExamples, contextObj) {
 		// Expand Drive Links in Agent Configuration Context
 		const agentContext = DriveService.processContext(config.contextInstructions || '');
 
@@ -420,6 +449,7 @@ Your Goal: ${config.prompt}
 INSTRUCTIONS:
 ${agentContext}
 `;
+
 
 		// Dynamic Routing Logic
 		// We check if the destination is a static Agent Name or a set of Instructions
@@ -493,26 +523,68 @@ ${config.outputDesc || 'N/A'}
 		}
 
 		// 1. Calculate Context to Pass (Granular Control)
-		const contextObj = {};
-		let hasContext = false;
+		// We prefer the Structured Context Container.
+		// If currentContext provided to this function is a string, it might be legacy or the first step.
+		// If currentContext is null/empty, we start a new container.
 
-		// Pass Input
+		let contextContainer = {
+			history: {}
+		};
+
+		// Attempt to parse existing context to preserve history
+		if (currentContext && currentContext.trim().startsWith('{')) {
+			try {
+				const parsed = JSON.parse(currentContext);
+				if (parsed.history) contextContainer.history = parsed.history;
+			} catch (e) {
+				// If parsing fails, treat valid string as legacy "Initial Context"
+				if (currentContext.trim()) {
+					contextContainer.history['Initial_Context'] = { output: currentContext };
+				}
+			}
+		} else if (currentContext && currentContext.trim()) {
+			// Legacy string context
+			contextContainer.history['Initial_Context'] = { output: currentContext };
+		}
+
+		// Pass Input / Output -> Add to History
 		if (config.passInput) {
-			contextObj.prior_input = currentInput;
-			hasContext = true;
-		}
-		// Pass Agent Instructions (Static)
-		if (config.passAgentContext) {
-			contextObj.prior_agent_instructions = config.contextInstructions || '';
-			hasContext = true;
-		}
-		// Pass Data Context (Dynamic)
-		if (config.passDataContext) {
-			contextObj.prior_data_context = currentContext;
-			hasContext = true;
+			// We key this by the *Current Configuration Name* (The agent that just finished)
+			// config.name is available in the passed config object
+			const agentName = config.name || 'Previous_Agent';
+			contextContainer.history[agentName] = {
+				input: currentInput,
+				output: currentOutput
+			};
 		}
 
-		const nextContext = hasContext ? JSON.stringify(contextObj, null, 2) : '';
+
+		// Pass Data Context -> Merge handled above by parsing `currentContext`
+		// If config.passDataContext is FALSE, we should CLEAR the history?
+		// User: "Pass Data Context to Next: Accumulate/append ... to the same for the subsequent agent"
+		// Implication: If unchecked, do NOT pass the prior data history?
+		if (!config.passDataContext) {
+			// Wipe history if the user explicitly didn't check "Pass Data Context"
+			// But wait, if they have "Pass Input" checked, they want *just* this agent's input/output.
+			// So we clear the *inherited* history, but keep the *newly added* entry from lines above?
+			// Actually, to be safe and allow "filtering", if passDataContext is false, we should probably start fresh.
+			// But we effectively built `contextContainer` from `currentContext`.
+			// Let's satisfy the requirement: If Pass Data Context is OFF, we do not carry forward the *incoming* context.
+			// Re-evaluating logic:
+			if (!config.passDataContext) {
+				contextContainer.history = {}; // Clear previous history
+				// Re-add current if PassInput was true (since that's a separate flag)
+				if (config.passInput) {
+					const agentName = config.name || 'Previous_Agent';
+					contextContainer.history[agentName] = {
+						input: currentInput,
+						output: currentOutput
+					};
+				}
+			}
+		}
+
+		const nextContext = JSON.stringify(contextContainer, null, 2);
 
 		// 2. Prepare Row Data
 		// Mapping: JobID -> JobID, Output -> Input, Context -> Context

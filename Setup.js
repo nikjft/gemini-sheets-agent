@@ -177,7 +177,6 @@ var Setup = {
 			'Prompt Core',
 			'Context Field',
 			'Pass Input to Next',
-			'Pass Agent Context to Next',
 			'Pass Data Context to Next',
 			'Input Description',
 			'Input Example',
@@ -218,7 +217,6 @@ var Setup = {
 				'Summarize this text.',
 				'Keep it under 50 words.',
 				'Yes', // Pass Input
-				'No',  // Pass Agent Context
 				'No',  // Pass Data Context
 				'A paragraph of text',
 				'Lorem ipsum...',
@@ -248,7 +246,6 @@ var Setup = {
 
 		setValidation('Auto-Run', ['Yes', 'No']);
 		setValidation('Pass Input to Next', ['Yes', 'No']);
-		setValidation('Pass Agent Context to Next', ['Yes', 'No']);
 		setValidation('Pass Data Context to Next', ['Yes', 'No']);
 		setValidation('Output Format', ['Text', 'Document', 'Append to Input Doc']);
 		setValidation('Use Training Data', ['Yes', 'No']); // New

@@ -249,6 +249,7 @@ If an agent produces a massive output (>45k chars) that needs to be passed to th
 ### 2. Dynamic Routing
 If you enter instructions in the `Destination Agent` field, the agent becomes a **Router**.
 *   **Example**: "If sentiment is positive route to Happy Response, else route to Apology."
+*   **Stop Condition**: To end the process dynamically, instruct the model to output `>> ROUTE: STOP`.
 *   The agent output will contain a routing tag (e.g. `>> ROUTE: Apology`).
 *   **Clean Handoff**: The system automatically **strips** this tag from the output before writing it to the sheet or creating a document, so your next agent receives clean data.
 
