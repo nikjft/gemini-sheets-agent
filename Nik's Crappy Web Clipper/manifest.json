@@ -1,0 +1,28 @@
+{
+    "manifest_version": 3,
+    "name": "Nik's crappy web clipper",
+    "version": "2.3",
+    "description": "One-click clipping to a web service of your choice.",
+    "permissions": [
+        "activeTab",
+        "scripting",
+        "storage",
+        "contextMenus"
+    ],
+    "action": {
+        "default_title": "Clip Job to Sheet"
+    },
+    "background": {
+        "service_worker": "background.js"
+    },
+    "content_scripts": [
+        {
+            "matches": [
+                "<all_urls>"
+            ],
+            "js": [
+                "content.js"
+            ]
+        }
+    ]
+}
