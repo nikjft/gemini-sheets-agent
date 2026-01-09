@@ -247,7 +247,7 @@ var Setup = {
 		setValidation('Auto-Run', ['Yes', 'No']);
 		setValidation('Pass Input to Next', ['Yes', 'No']);
 		setValidation('Pass Data Context to Next', ['Yes', 'No']);
-		setValidation('Output Format', ['Text', 'Document', 'Append to Input Doc']);
+		setValidation('Output Format', ['Text', 'Document', 'Document with Metadata', 'Append to Input Doc']);
 		setValidation('Use Training Data', ['Yes', 'No']); // New
 		setValidation('Notify User', ['Yes', 'No']); // New
 

@@ -327,7 +327,13 @@ var AgentRunner = {
 				// Uses the CLEANED `finalOutput` text.
 				// Document Creation Logic
 				// Uses the CLEANED `finalOutput` text.
-				if (config.outputFormat === 'Document') {
+				if (config.outputFormat === 'Document' || config.outputFormat === 'Document with Metadata') {
+
+					// Append Metadata if requested
+					if (config.outputFormat === 'Document with Metadata') {
+						finalOutput += `\n\n---\n# Metadata & Source Context\n\n## Input Data\n${inputVal}\n\n## Context\n${rowContext}\n`;
+					}
+
 					const docTitle = `${config.name} Output - ${jobId}`;
 					try {
 						const docUrl = DriveService.createDocumentFromMarkdown(docTitle, finalOutput);
