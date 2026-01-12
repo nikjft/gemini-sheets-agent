@@ -2,20 +2,32 @@
 
 // 1. Initialization
 chrome.runtime.onInstalled.addListener(() => {
-    chrome.contextMenus.create({
-        id: "clip_selection",
-        title: "Clip Selection to Service",
-        contexts: ["selection"]
-    });
-    chrome.contextMenus.create({
-        id: "clip_page",
-        title: "Clip Page to Service",
-        contexts: ["page", "frame"]
+    // Clear existing menus to avoid duplicate ID errors during development/reloads
+    chrome.contextMenus.removeAll(() => {
+        chrome.contextMenus.create({
+            id: "clip_selection",
+            title: "Clip Selection to Service",
+            contexts: ["selection"]
+        });
+        chrome.contextMenus.create({
+            id: "clip_page",
+            title: "Clip Page to Service",
+            contexts: ["page", "frame"]
+        });
+        // This adds the menu item when right-clicking the extension icon
+        chrome.contextMenus.create({
+            id: "open_settings",
+            title: "Configure Services & Rules",
+            contexts: ["action"]
+        });
     });
 });
 
 // 2. Context Menu Handler
 chrome.contextMenus.onClicked.addListener(async (info, tab) => {
+    if (info.menuItemId === "open_settings") {
+        return chrome.runtime.openOptionsPage();
+    }
     const textToClip = info.selectionText || "";
     await handleClipRequest(tab, textToClip);
 });
@@ -30,6 +42,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
 // 4. Core Logic
 async function handleClipRequest(tab, selectionText) {
+    if (!tab) return;
     const services = (await chrome.storage.local.get('services')).services || [];
     const rules = (await chrome.storage.local.get('rules')).rules || [];
 
@@ -94,7 +107,7 @@ async function executeWebhook(service, data, tabId) {
         // Variable Substitution
         let body = service.bodyTemplate
             .replace(/{{TEXT}}/g, escapeJSONString(data.text))
-            .replace(/{{URL}}/g, data.url) // URL is usually safe in JSON if quoted, but maybe escape?
+            .replace(/{{URL}}/g, escapeJSONString(data.url))
             .replace(/{{TITLE}}/g, escapeJSONString(data.title));
 
         // Parse to JSON to ensure validity (User provided a string template)
@@ -147,6 +160,7 @@ async function showServicePicker(tabId, services, data) {
 }
 
 async function sendMessageToTab(tabId, message) {
+    if (!tabId) return;
     try {
         await chrome.tabs.sendMessage(tabId, message);
     } catch (e) {
@@ -156,7 +170,7 @@ async function sendMessageToTab(tabId, message) {
 }
 
 function escapeJSONString(str) {
-    if (!str) return "";
+    if (typeof str !== 'string') return "";
     return str
         .replace(/\\/g, '\\\\')
         .replace(/\n/g, '\\n')

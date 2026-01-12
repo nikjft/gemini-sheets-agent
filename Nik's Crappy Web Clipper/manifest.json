@@ -13,8 +13,10 @@
         "contextMenus"
     ],
     "action": {
-        "default_title": "Clip Job to Sheet"
+        "default_title": "Clip Job to Sheet",
+        "default_popup": "popup.html"
     },
+    "options_page": "popup.html",
     "background": {
         "service_worker": "background.js"
     },
