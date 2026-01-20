@@ -84,21 +84,21 @@ var Utilities_Helper = {
 				const getVal = (idx) => (idx >= 0 && row[idx] !== undefined) ? row[idx].toString() : '';
 
 				configs[name] = {
-					name: name,
+					name: name.toString().trim(),
 					autoRun: getVal(indices.autoRun).toLowerCase() === 'yes',
-					prompt: row[indices.prompt],
-					contextInstructions: row[indices.contextInstructions],
+					prompt: row[indices.prompt].toString().trim(),
+					contextInstructions: row[indices.contextInstructions].toString().trim(),
 					passInput: getVal(indices.passInput).toLowerCase() === 'yes',
 					passDataContext: getVal(indices.passDataContext).toLowerCase() === 'yes',
-					inputDesc: row[indices.inputDesc],
-					inputExample: row[indices.inputExample],
-					outputDesc: row[indices.outputDesc],
-					outputExample: row[indices.outputExample],
-					outputFormat: row[indices.outputFormat] || 'Text', // Default to Text
+					inputDesc: row[indices.inputDesc].toString().trim(),
+					inputExample: row[indices.inputExample].toString().trim(),
+					outputDesc: row[indices.outputDesc].toString().trim(),
+					outputExample: row[indices.outputExample].toString().trim(),
+					outputFormat: (row[indices.outputFormat] || 'Text').toString().trim(), // Default to Text
 					maxOutputTokens: parseInt(row[indices.maxOutputTokens]) || 500, // Default to 500
 					useTrainingData: getVal(indices.useTrainingData).toLowerCase() === 'yes', // Default to False
-					model: row[indices.model],
-					destination: row[indices.destination],
+					model: row[indices.model].toString().trim(),
+					destination: row[indices.destination] ? row[indices.destination].toString().trim() : '',
 					notifyUser: getVal(indices.notifyUser),
 					postProcessingUrl: getVal(indices.postProcessingUrl)
 				};
